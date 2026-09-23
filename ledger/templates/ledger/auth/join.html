@@ -1,0 +1,19 @@
+{% extends "ledger/base.html" %}
+{% block title %}ساخت حساب{% endblock %}
+{% block content %}
+<div class="auth">
+  <div class="brand-big">{{ site_name }}</div>
+  <p class="center muted">به دعوت دوستتان خوش آمدید. یک نام کاربری و رمز عبور قوی انتخاب کنید.</p>
+  <form method="post" class="card" novalidate>{% csrf_token %}
+    {% include "ledger/_errors.html" %}
+    {% include "ledger/_field.html" with f=form.username %}
+    {% include "ledger/_field.html" with f=form.password1 %}
+    {% include "ledger/_field.html" with f=form.password2 %}
+    <button class="btn block" type="submit">ساخت حساب</button>
+  </form>
+  <p class="muted small">
+    اطلاعات مالی شما فقط برای خودتان قابل دیدن است. مدیر سرور به صفحه‌ای برای دیدن تراکنش‌های شما دسترسی ندارد،
+    ولی چون داده روی سرور او نگه داشته می‌شود، فقط وقتی عضو شوید که به او اعتماد دارید.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: smsledger
+          POSTGRES_USER: smsledger
+          POSTGRES_PASSWORD: ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U smsledger" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PASSWORD: ci-only
+      SECRET_KEY: ci-only-not-a-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install (hash-pinned)
+        run: |
+          pip install --require-hashes -r requirements.txt
+          pip install ruff==0.16.8 pip-audit
+      - name: Lint
+        run: ruff check .
+      - name: Migrations are committed
+        run: python manage.py makemigrations --check --dry-run
+      - name: Django deployment checklist
+        run: python manage.py check --deploy --fail-level WARNING
+        env:
+          DOMAIN: tx.example.ir
+      - name: Tests (PostgreSQL)
+        run: python manage.py test ledger
+      - name: Known vulnerabilities in dependencies
+        run: pip-audit --requirement requirements.txt --require-hashes --disable-pip
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build app image
+        run: docker build -t smsledger:ci .
+      - name: Build backup image
+        run: docker build -t smsledger-backup:ci deploy/backup
+      - name: Compose file is valid
+        working-directory: deploy
+        run: |
+          cp .env.example .env && cp backup.env.example backup.env
+          sed -i 's/^SECRET_KEY=.*/SECRET_KEY=x/; s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=x/' .env
+          docker compose --profile backup config -q

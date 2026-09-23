@@ -1,0 +1,9 @@
+# Runtime dependencies. Regenerate the pinned, hashed lock file with:
+#   pip-compile --generate-hashes --allow-unsafe -o requirements.txt requirements.in
+Django>=5.2,<5.3          # LTS, security support until April 2028
+psycopg[binary]>=3.2,<4
+gunicorn
+whitenoise>=6,<7
+argon2-cffi
+segno                     # QR codes for 2FA setup, pure Python
+tzdata                    # Asia/Tehran rules on any base image

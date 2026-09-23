@@ -1,0 +1,15 @@
+{% extends "ledger/base.html" %}
+{% block title %}ورود دو مرحله‌ای{% endblock %}
+{% block content %}
+<div class="auth">
+  <div class="brand-big">{{ site_name }}</div>
+  <form method="post" class="card" novalidate>{% csrf_token %}
+    <h1>کد تأیید</h1>
+    <p class="muted">کد ۶ رقمی برنامه احراز هویت را وارد کنید. اگر گوشی در دسترس نیست، یکی از کدهای بازیابی را بزنید.</p>
+    {% if error %}<ul class="errorlist nonfield"><li>{{ error }}</li></ul>{% endif %}
+    {% include "ledger/_field.html" with f=form.code %}
+    <button class="btn block" type="submit">تأیید</button>
+  </form>
+  <p class="center small"><a href="{% url 'login' %}">بازگشت</a></p>
+</div>
+{% endblock %}

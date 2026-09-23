@@ -1,155 +1,248 @@
 # smsledger
 
-Bank SMS → your own server → SQLite ledger with a dashboard and CSV export.
-Pure Python stdlib, with no dependencies. Works with **every iOS version that has Shortcuts automations (iOS 14.x+)**.
+Bank SMS → a private, shared-server ledger for you and your friends.
+Each iPhone forwards its bank SMS through a Shortcut; the server parses them into transactions,
+and each person gets a Persian (RTL) web app with categories, budgets, reports and CSV export.
+Invite-only, per-user isolation, 2FA, no OTP ever stored.
 
 ```
-iPhone (Blu SMS arrives)
-  └─ Shortcut automation
-       ├─ 1. append SMS to iCloud queue file   ← nothing is lost if the network is down
-       └─ 2. POST /ingest ───────────► smsledger (VPS, behind Caddy TLS)
-                                          ├─ normalize (Persian digits, RLM marks)
-Nightly "Sync" automation                 ├─ sha256 dedupe (resending is always safe)
-  └─ POST whole queue file ──────────►    ├─ parse (bank template) or keep as "unparsed"
-                                          └─ SQLite → dashboard / CSV / /metrics
+iPhone (each user)                                  Server (docker compose)
+ Message automation (bank sender, "ریال")
+  └─ Shortcut "SMS to Ledger"
+       1. drop OTP / login-code SMS on the phone
+       2. append SMS to iCloud queue file ───── offline? sent by the nightly "Sync" shortcut
+       3. POST /ingest  (device token) ───────► Caddy (HTTPS) ─► Django app ─► PostgreSQL
+                                                  ├─ drop OTP again, never store it
+                                                  ├─ per-user sha256 dedupe (resending is safe)
+                                                  ├─ parse (bank template) or keep as "unparsed"
+                                                  ├─ categorize (your rules → built-in hints)
+                                                  └─ balance-gap check (finds missed SMS)
+ PWA (Safari → Add to Home Screen) ◄──────────── inbox · transactions · reports · budgets
+                                                 restic ─► encrypted offsite backups
 ```
 
-## What "fully automatic" means on each iOS version
+## What "automatic" means on each iOS version
 
-| iOS | On each new SMS | Nightly sync | Result |
-|---|---|---|---|
-| 17+ | Runs silently (Run Immediately) | Silent | Fully automatic |
-| 15.4 – 16.x | iOS shows a notification; **tap it** | Silent (Time of Day automations can run without asking) | One tap per SMS; missed taps are caught by balance-gap detection + Import SMS |
-| 14 – 15.3 | Notification to tap | Notification to tap | Semi-automatic |
+iOS gives apps no access to SMS. The only hook is the Shortcuts **Message** automation:
 
-> **iOS 15/16 note:** Apple blocks Message automations from running without a tap. That's an OS rule and no Shortcut can bypass it.
-> The only fully tap-free path on iOS ≤16 is a Mac relay (Messages sync to a Mac, then a script reads `chat.db`). If you ever get a Mac, the same `/ingest` endpoint accepts it.
-> If you miss a tap, use the **Import SMS** shortcut (step 6): copy the message, run the shortcut, and dedupe makes it safe.
+| iOS | Each new SMS | Nightly queue sync |
+|---|---|---|
+| 17+ | fully automatic, silent ("Run Immediately") | automatic |
+| 14 – 16 | a notification appears; **tap it** (Apple's rule, no workaround except a Mac relay) | automatic on 15.4+ |
+
+A missed tap is not silent: every Blu SMS carries the balance, so the next SMS shows a
+**balance gap** with the missing amount, and the user pastes the missed SMS into the app.
 
 ---
 
-## Step 1: Server (Iran VPS recommended, so the phone reaches it without a VPN)
+## Security model
+
+Built so friends can use one server without seeing each other, and without the operator
+browsing their money by accident.
+
+- **Invite-only.** Single-use signup links (7 days), created by staff.
+- **Isolation.** Every row has a `user` and every query filters on it; tests try to read/modify
+  other users' objects through every URL.
+- **Device tokens are write-only.** A token in a Shortcut can add SMS through `/ingest` and
+  nothing else. Tokens are random 256-bit, stored as sha256, shown once, revocable per device.
+- **OTP / login codes never stored.** Filtered on the phone *and* on the server (not stored,
+  not logged, not even hashed). Dynamic-password SMS usually contain "ریال", so the
+  automation's text filter alone would not stop them.
+- **Logins.** Argon2 password hashing, case-insensitive usernames, 15-minute lockout after
+  10 failures per username or 30 per IP, optional TOTP 2FA with one-time recovery codes. **2FA is mandatory
+  for staff**, and Django admin's login is routed through the same 2FA flow.
+- **Browser.** Strict CSP (no inline scripts or styles), HSTS, `__Host-` cookies,
+  `SameSite=Lax`, CSRF on every form, `Cache-Control: no-store` on every page, frame-busting,
+  CSV-injection escaping in exports, no third-party requests (the font is self-hosted).
+- **Operator minimization.** Staff pages show only counts and health (e.g. "3 unparsed SMS").
+  Transactions, SMS and budgets are not in Django admin. The only SMS text staff see is what
+  a user explicitly shares from the app after editing out personal details.
+- **Logs** hold counts and request paths without query strings: no SMS text, amounts or tokens.
+- **Infra.** App container is non-root, read-only, all capabilities dropped; Postgres sits on an
+  internal network with no internet; dependencies are hash-pinned and audited in CI.
+
+**What this is not:** end-to-end encrypted. The server has to read an SMS to parse it, so
+whoever controls the server (you) can technically read the database. Only invite people
+who trust you with that, and protect the server accordingly (SSH keys only, updates,
+encrypted offsite backups whose password lives somewhere else).
+
+---
+
+## Server setup
+
+Any small VPS with Docker (1 vCPU / 1 GB is plenty for a group of friends) and a DNS name.
+An Iran VPS is recommended: phones reach it without a VPN and it keeps working during
+international internet cuts.
 
 ```bash
 git clone <this repo> smsledger && cd smsledger/deploy
 cp .env.example .env
-sed -i "s/^INGEST_TOKEN=.*/INGEST_TOKEN=$(openssl rand -hex 24)/" .env
-sed -i "s/^DASH_PASS=.*/DASH_PASS=$(openssl rand -base64 18)/" .env
-vi .env                                   # set DOMAIN=tx.yourdomain.ir  (A record → VPS IP)
+python3 - <<'EOF'
+import re, secrets
+s = open(".env").read()
+s = re.sub(r"^SECRET_KEY=$", "SECRET_KEY=" + secrets.token_urlsafe(48), s, flags=re.M)
+s = re.sub(r"^POSTGRES_PASSWORD=$", "POSTGRES_PASSWORD=" + secrets.token_urlsafe(24), s, flags=re.M)
+open(".env", "w").write(s)
+EOF
+vi .env                      # DOMAIN=tx.yourdomain.ir  (A record -> this server)
 docker compose up -d --build
-docker compose logs -f smsledger
+docker compose ps            # app and db should become "healthy"
 ```
 
-Smoke test:
+Create your admin account, then log in at `https://tx.yourdomain.ir`, turn on 2FA
+(required for the admin pages) and open **بیشتر → مدیریت** to create invite links:
 
 ```bash
-TOKEN=$(grep ^INGEST_TOKEN .env | cut -d= -f2)
-curl -s https://tx.yourdomain.ir/ingest -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"sms":"بلو\nبرداشت پول\nآرمین عزیز، 1,000,000 ریال از حساب شما پرید.\nموجودی: 2,887,139 ریال\n۱۴:۰۳\n۱۴۰۵.۰۶.۳۱","source":"curl"}'
-# → {"status":"created","tx":{"bank":"blu","direction":"OUT","amount":1000000,...}}
-# same command again → {"status":"duplicate"}
+docker compose exec app python manage.py createsuperuser
+docker compose exec app python manage.py invite --note "Ali"   # or use the staff page
 ```
 
-Dashboard: `https://tx.yourdomain.ir/` (basic auth `DASH_USER` / `DASH_PASS`).
+### Iran servers: Docker Hub and PyPI
 
-## Step 2: Save the Blu sender as a contact
+Docker Hub refuses Iranian IPs. Either add a registry mirror to the Docker daemon
+(simplest, covers every image):
 
-The Message trigger filters by contact. Open a Blu SMS, tap the sender, choose **Create New Contact**, and name it `Blu`.
+```json
+// /etc/docker/daemon.json  then: systemctl restart docker
+{ "registry-mirrors": ["https://docker.arvancloud.ir"] }
+```
 
-## Step 3: Shortcut "SMS → Ledger" (the worker)
+or set `PYTHON_IMAGE`, `POSTGRES_IMAGE`, `CADDY_IMAGE`, `RESTIC_IMAGE` in `.env` to mirrored
+names (examples in `.env.example`). If PyPI is unreachable during the build, set
+`PIP_INDEX_URL` to a PyPI mirror; hashes are still verified, so a mirror can't swap packages.
 
-Shortcuts → **Shortcuts** tab → **+** → name it `SMS → Ledger`:
+---
 
-1. **Text**: `[Shortcut Input]`, then a new line, then `---`
-   *(tap the variable and pick Shortcut Input; if it offers properties, pick **Content**)*
-2. **Append to Text File**
-   - File path: `smsledger/queue.txt` (in the Shortcuts iCloud folder)
-   - Text: the Text from step 1
-   - Turn **Make New Line** on
-3. **Get Contents of URL**
-   - URL: `https://tx.yourdomain.ir/ingest?source=iphone`
-   - Method: **POST**
-   - Headers: `Authorization` = `Bearer <INGEST_TOKEN>`
-   - Request Body: **JSON**, with one key `sms` (Text) = `Shortcut Input`
+## iPhone setup (each user)
 
-Step 2 runs before step 3 on purpose: if there's no internet, the SMS is already in the queue.
+Everything is explained in Persian inside the app, with the user's own server URL filled in:
+**بیشتر → راه‌اندازی آیفون**. In short:
 
-## Step 4: Automation (fires on every Blu SMS)
+1. **Device key**: create one on the setup page (shown once).
+2. **Contact**: save the bank's SMS sender as a contact (e.g. `Blu`).
+3. **Shortcut "SMS to Ledger"**:
+   - **Match Text** on *Shortcut Input* with pattern
+     `رمز(?!\s*ارز)|یک.?بار|کد.?(تایید|تأیید|ورود|فعال|پویا)|OTP` → **If** *Matches* has any
+     value → **Stop This Shortcut**
+   - **Text**: *Shortcut Input* + a line `---` → **Append to Text File** `smsledger/queue.txt`
+   - **Get Contents of URL**: `POST https://tx.yourdomain.ir/ingest?source=iphone`,
+     header `Authorization: Bearer <device key>`, JSON body `{"sms": Shortcut Input}`
+4. **Automation**: Message → sender = bank contact(s), contains `ریال` → Run Shortcut
+   (iOS 17+: *Run Immediately*, *Notify When Run* off).
+5. **Shortcut "Sync SMS Queue"** + a daily 03:00 automation: posts `queue.txt` to
+   `/ingest?split=1&source=queue` and deletes the file only if the response has a `status` key
+   (errors never contain one, so a failed sync keeps the queue).
+6. **Old SMS**: copy them from Messages and paste into **وارد کردن پیامک**. Duplicates are ignored.
 
-Shortcuts → **Automation** → **+** → (Create Personal Automation) → **Message**:
+To save your friends the typing, build the shortcut once, share it as an iCloud link with
+*Import Questions* for the URL and the key, and set `SHORTCUT_URL` in `.env`: the setup page
+then shows an "add shortcut" button. (The Message automation can't be shared; each person
+creates it.)
 
-- Sender: `Blu`
-- Message Contains: `ریال` (skips OTP and ad SMS)
-- Next → action **Run Shortcut** → `SMS → Ledger`, with Input = *Shortcut Input* (the message)
-- **iOS 17+:** choose **Run Immediately** and turn *Notify When Run* off
-- **iOS ≤16:** you'll get a notification on each SMS; tap it and it runs
+---
 
-## Step 5: Shortcut "Sync SMS Queue" plus a nightly automation
+## Upgrading from v1 (single-user SQLite version)
 
-This covers failed POSTs. Create shortcut `Sync SMS Queue`:
+v1 ran as compose project `deploy` on the same ports 80/443: stop it first (its data volume is
+kept), set up v2 as above, then import the old SMS into your account (dedupe makes it safe to
+run twice). Finally give your Shortcut a new device key and add the OTP step above; v1's
+`INGEST_TOKEN` / `DASH_*` settings are no longer used.
 
-1. **Get File** `smsledger/queue.txt` (turn *Error If Not Found* off)
-2. **If** File *has any value*:
-   - **Get Contents of URL**
-     - URL: `https://tx.yourdomain.ir/ingest?split=1&source=queue`
-     - Method: POST
-     - Header: `Authorization: Bearer <INGEST_TOKEN>`
-     - Request Body: **File**, set to the File from step 1
-   - **If** Contents of URL *contains* `status` → **Delete Files** `queue.txt` (turn *Confirm* off)
-3. End If
-
-A successful response always contains `status`, so a 401/5xx never deletes the queue. If there's no network, Shortcuts stops at the POST and the queue is kept.
-
-Automation: **Time of Day** 03:00 daily → Run Shortcut `Sync SMS Queue` → turn **Ask Before Running** off (allowed for Time of Day on iOS 15.4+).
-
-## Step 6: Shortcut "Import SMS" (manual catch-up, any iOS)
-
-1. **Get Clipboard**
-2. **Get Contents of URL** `https://tx.yourdomain.ir/ingest?split=1&source=manual`, POST, Bearer header, Request Body **File** = Clipboard
-3. **Show Result**
-
-In Messages, long-press the SMS → **Copy** → run `Import SMS` from the widget or Back Tap. To import several at once, paste them into Notes with a `---` line between each, copy all, and run the shortcut.
-Use this once to backfill your old Blu SMS history. Duplicates are ignored.
+```bash
+docker compose -p deploy down                         # stops v1; volumes are not deleted
+docker volume ls | grep ledger                        # find the old volume, e.g. deploy_ledger
+docker run --rm -v deploy_ledger:/data alpine cat /data/ledger.db > ledger.db
+# the app container is read-only, so stream the file into its /tmp (docker cp can't write there)
+docker compose exec -T app sh -c 'cat > /tmp/ledger.db' < ledger.db
+docker compose exec app python manage.py import_legacy /tmp/ledger.db --user <your-username>
+```
 
 ---
 
 ## Operations
 
-**Backup** (cron on the VPS):
+**Updates**: `git pull && docker compose up -d --build`. On start the app runs migrations and
+re-parses every unparsed SMS with the new parsers, so a new bank template fixes old SMS too.
+
+**Backups** (daily `pg_dump` → [restic](https://restic.net): encrypted, deduplicated, keeps
+7 daily / 4 weekly / 12 monthly, spot-checks 10% of the data each run):
 
 ```bash
-0 4 * * * cd /root/smsledger/deploy && docker compose exec -T smsledger python -c "import sqlite3,datetime;sqlite3.connect('/data/ledger.db').backup(sqlite3.connect(f'/data/backup-{datetime.date.today()}.db'))"
+cp backup.env.example backup.env && vi backup.env     # S3-compatible bucket on ANOTHER provider
+sed -i 's/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=backup/' .env
+docker compose up -d                                  # first backup runs immediately
+docker compose exec backup backup list                # snapshots
+docker compose ps backup                              # "unhealthy" = no good backup in 26 h
 ```
 
-**Monitoring:** scrape `smsledger:8080/metrics` from inside the docker network (Caddy hides it publicly).
+Keep `RESTIC_PASSWORD` somewhere off the server: without it the backups can't be read.
+**Restore** (test it once a month into a scratch database):
+
+```bash
+docker compose exec -T backup backup dump > smsledger.dump
+docker compose exec -T db createdb -U smsledger restore_test
+docker compose exec -T db pg_restore --no-owner --no-privileges -U smsledger -d restore_test < smsledger.dump
+docker compose exec -T db psql -U smsledger -d restore_test -c "select count(*) from ledger_transaction"
+# real restore: stop app, restore into "smsledger" with --clean --if-exists, start app
+```
+
+**Monitoring**: set `METRICS_TOKEN` and scrape `http://app:8000/metrics` from the
+`smsledger_web` docker network (Caddy returns 404 for `/metrics` publicly). Metrics are
+counts only, with no per-user labels:
 
 ```yaml
-- alert: SmsLedgerUnparsed
-  expr: smsledger_unparsed > 0
-  for: 10m
-- alert: SmsLedgerSilent            # no bank SMS for 3 days = automation probably broke
-  expr: time() - smsledger_last_ingest_timestamp_seconds > 3*86400
+# vmagent / Prometheus scrape job
+- job_name: smsledger
+  authorization: {credentials: <METRICS_TOKEN>}
+  static_configs: [{targets: ["app:8000"]}]
 ```
 
-**Balance gaps:** each SMS carries `موجودی`. If `prev_balance ± amount ≠ balance`, the dashboard highlights that row: an SMS was missed before it. Fix it with **Import SMS**.
+```yaml
+# alert rules
+- alert: SmsLedgerDown
+  expr: up{job="smsledger"} == 0
+  for: 5m
+- alert: SmsLedgerUnparsed            # a bank changed its template, or a new bank appeared
+  expr: smsledger_messages{status="unparsed"} > 0
+  for: 1h
+- alert: SmsLedgerUserSilent          # someone's iPhone automation probably broke
+  expr: smsledger_users_silent > 0
+  for: 6h
+- alert: SmsLedgerNoIngest            # nobody's SMS arrive: server-side or network problem
+  expr: time() - smsledger_last_ingest_timestamp_seconds > 2 * 86400
+```
 
-**API:**
+Users also see their own problems in the app: a "no SMS for 3 days" warning, balance gaps
+and unparsed SMS, all on the home page.
 
-| Endpoint | Auth | |
-|---|---|---|
-| `POST /ingest` | Bearer | JSON `{"sms": "..." \| [...], "source": "..."}`, or text/plain (`?split=1` splits on `---` lines) |
-| `POST /admin/reparse` | Bearer | re-parse `unparsed` rows after adding a template |
-| `GET /api/tx?status=&limit=` | Bearer/Basic | JSON |
-| `GET /export.csv` | Bearer/Basic | UTF-8 BOM, so Excel shows Persian correctly |
-| `GET /healthz`, `/metrics` | none | |
+---
 
 ## Adding a bank
 
-1. Paste 2–3 real SMS (withdrawal, deposit, transfer) into `tests/test_parsers.py`.
-2. Add a `class XParser(BankParser)` in `app/parsers.py` and append it to `PARSERS`.
-3. `python3 -m unittest -v`
-4. `docker compose up -d --build && curl -XPOST -H "Authorization: Bearer $TOKEN" https://tx.yourdomain.ir/admin/reparse`
-5. Add the bank's sender to the automation (one automation per sender).
+1. When a friend's SMS aren't recognised, they tap **ارسال برای مدیر** on the unparsed SMS
+   (after editing out personal details). You'll see it on the staff page.
+2. Add a `BankParser` subclass in `ledger/parsers.py` (see `BluParser`), append it to
+   `PARSERS`, and put 2–3 real, anonymized samples (withdrawal, deposit, transfer) in
+   `ledger/tests/test_parsers.py`. If the SMS carries a masked account/card number, return it
+   as `Tx.account` so each account gets its own balance chain.
+3. Deploy. Existing unparsed SMS of every user are re-parsed automatically.
 
-Unknown SMS are never dropped. They're stored as `unparsed` with the raw text and show up on the dashboard and in the metric.
+---
+
+## Development
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install --require-hashes -r requirements.txt && pip install ruff
+export DEBUG=1                      # SQLite in ./dev.sqlite3, no HTTPS redirect
+python manage.py migrate && python manage.py createcachetable && python manage.py createsuperuser
+python manage.py runserver
+python manage.py test ledger        # set POSTGRES_* to run against PostgreSQL, as CI does
+ruff check .
+```
+
+Dependencies: edit `requirements.in`, then
+`pip-compile --generate-hashes --allow-unsafe --strip-extras -o requirements.txt requirements.in`.
+
+Layout: `ledger/parsers.py` + `jalali.py` (pure Python, no Django), `ingest.py` (SMS → transactions,
+dedupe, gaps), `rules.py`, `reports.py`, `views/`, `templates/`, `deploy/` (compose, Caddy, backups).

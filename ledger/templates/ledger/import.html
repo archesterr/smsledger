@@ -1,0 +1,23 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}وارد کردن پیامک{% endblock %}
+{% block heading %}وارد کردن پیامک{% endblock %}
+{% block content %}
+{% if result %}
+<div class="alert info"><span class="ico">✓</span><div>
+  {{ result.created|fa }} تراکنش تازه ثبت شد ·
+  {{ result.duplicate|fa }} تکراری بود ·
+  {{ result.unparsed|fa }} خوانده نشد{% if result.ignored %} · {{ result.ignored|fa }} پیامک رمز/کد تأیید کنار گذاشته شد (ذخیره نمی‌شود){% endif %}.
+  {% if result.unparsed %}<a href="{% url 'messages' %}">پیامک‌های خوانده‌نشده</a>{% endif %}
+</div></div>
+{% endif %}
+<ol class="steps">
+  <li>در برنامه Messages، روی پیامک بانک انگشت نگه دارید و <b>Copy</b> را بزنید.</li>
+  <li>اینجا بچسبانید. برای چند پیامک، بینشان یک خط فقط با <code>---</code> بگذارید.</li>
+  <li>دکمه ثبت را بزنید. پیامک تکراری دوباره ثبت نمی‌شود، پس نگران نباشید.</li>
+</ol>
+<form method="post" class="card" novalidate>{% csrf_token %}
+  {% include "ledger/_field.html" with f=form.text %}
+  <div class="actions"><button class="btn" type="submit">ثبت</button></div>
+</form>
+<p class="muted small">پیامک‌های رمز پویا و کد تأیید هیچ‌وقت ذخیره نمی‌شوند.</p>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}تنظیمات{% endblock %}
+{% block heading %}تنظیمات و امنیت{% endblock %}
+{% block content %}
+<h2>نمایش</h2>
+<form method="post" class="card" novalidate>{% csrf_token %}<input type="hidden" name="form" value="unit">
+  {% include "ledger/_field.html" with f=unit_form.unit %}
+  <button class="btn" type="submit">ذخیره</button>
+</form>
+
+<h2>ورود دو مرحله‌ای</h2>
+<div class="card">
+{% if user.has_2fa %}
+  <p>✅ روشن است. {{ recovery_left|fa }} کد بازیابی استفاده‌نشده دارید.</p>
+  {% if not user.is_staff %}<a class="btn secondary small" href="{% url 'twofa_disable' %}">خاموش کردن</a>{% endif %}
+{% else %}
+  <p>خاموش است. با روشن کردن، برای ورود علاوه بر رمز، کد ۶ رقمی برنامه‌ای مثل Google Authenticator یا Passwords خود آیفون لازم می‌شود.</p>
+  <a class="btn" href="{% url 'twofa_setup' %}">روشن کردن</a>
+{% endif %}
+</div>
+
+<h2>تغییر رمز عبور</h2>
+<form method="post" class="card" novalidate>{% csrf_token %}<input type="hidden" name="form" value="password">
+  {% include "ledger/_errors.html" with form=pw_form %}
+  {% include "ledger/_field.html" with f=pw_form.old_password %}
+  {% include "ledger/_field.html" with f=pw_form.new_password1 %}
+  {% include "ledger/_field.html" with f=pw_form.new_password2 %}
+  <button class="btn" type="submit">تغییر رمز</button>
+  <p class="muted small">بعد از تغییر رمز، همه دستگاه‌های دیگری که با این حساب وارد شده‌اند خارج می‌شوند.</p>
+</form>
+
+<h2>داده‌های من</h2>
+<div class="card">
+  <p>همه تراکنش‌ها با دسته و توضیح و متن پیامک، در یک فایل CSV (با اکسل باز می‌شود).</p>
+  <a class="btn secondary" href="{% url 'export_all' %}">⬇️ دریافت همه داده‌ها</a>
+</div>
+<div class="card">
+  <p>حذف همیشگی حساب و همه داده‌ها از سرور.</p>
+  <a class="btn ghost" href="{% url 'delete_account' %}">حذف حساب</a>
+</div>
+{% endblock %}

@@ -1,18 +1,33 @@
-"""Bank SMS parsers. Add a new bank = subclass BankParser + append to PARSERS."""
+"""Bank SMS parsers. Add a new bank = subclass BankParser + append to PARSERS.
+
+Pure Python on purpose (no Django imports): easy to test with real samples.
+"""
 from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import datetime
 
 from . import jalali
 
-TEHRAN = timezone(timedelta(hours=3, minutes=30))  # Iran dropped DST in 2022 -> fixed offset
+# Real tz rules, not a fixed +03:30: Iran used DST until 2022, and old SMS get backfilled.
+TEHRAN = jalali.TEHRAN
 
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 _CHARS = str.maketrans({"ي": "ی", "ك": "ک", "٬": ",", "：": ":"})
 _INVISIBLE = re.compile(r"[‌‍‎‏؜‪-‮⁦-⁩﻿]")
+
+# One-time passwords and login codes must never be stored or forwarded. Dynamic-password SMS
+# usually contain the amount in ریال, so the Shortcut's "contains ریال" filter doesn't stop them.
+# Kept deliberately broad: a dropped real transaction still shows up as a balance gap.
+# Not bare "پویا": it's a common first name ("انتقال به پویا ..."); "رمز پویا" is caught by رمز.
+_SENSITIVE = re.compile(
+    r"رمز(?!\s*ارز)|یک\s*بار\s*مصرف"
+    r"|کد\s*(?:تایید|تأیید|ورود|فعال\s*سازی|امنیتی|یک\s*بار|محرمانه|پویا)"
+    r"|\b(?:otp|password|passcode|pin|cvv2?|verification|login code)\b",
+    re.I,
+)
 
 
 def normalize(text: str) -> str:
@@ -25,6 +40,10 @@ def fingerprint(text: str) -> str:
     return hashlib.sha256(normalize(text).encode()).hexdigest()
 
 
+def is_sensitive(text: str) -> bool:
+    return bool(_SENSITIVE.search(normalize(text)))
+
+
 def _int(s: str | None) -> int | None:
     return int(s.replace(",", "")) if s else None
 
@@ -32,15 +51,20 @@ def _int(s: str | None) -> int | None:
 @dataclass
 class Tx:
     bank: str
-    direction: str            # IN | OUT
-    amount: int               # rial, always positive
-    balance: int | None
-    occurred_at: str | None   # ISO8601, Tehran offset
-    jdate: str | None         # Jalali YYYY-MM-DD as printed in the SMS
-    title: str | None
+    direction: str                  # IN | OUT
+    amount: int                     # rial, always positive
+    balance: int | None             # balance after this transaction, if the SMS has it
+    occurred_at: datetime | None    # Tehran-aware
+    title: str = ""                 # the bank's own label, e.g. "برداشت پول"
+    account: str = ""               # masked account/card number if the bank sends one
+    counterparty: str = ""          # other side of a transfer, if the bank sends it
 
-    def dict(self):
-        return asdict(self)
+    def as_json(self) -> dict:
+        return {
+            "bank": self.bank, "direction": self.direction, "amount": self.amount, "balance": self.balance,
+            "occurred_at": self.occurred_at.isoformat() if self.occurred_at else None,
+            "title": self.title, "account": self.account, "counterparty": self.counterparty,
+        }
 
 
 class ParseError(Exception):
@@ -49,6 +73,7 @@ class ParseError(Exception):
 
 class BankParser:
     name = "base"
+    label = "Bank"
 
     def match(self, text: str) -> bool:
         raise NotImplementedError
@@ -65,19 +90,17 @@ OUT_WORDS = ("برداشت", "پرید", "خرید", "کسر", "انتقال ا�
 IN_WORDS = ("واریز", "نشست", "دریافت", "به حساب شما")
 
 
-def parse_datetime(text: str) -> str | None:
+def parse_datetime(text: str) -> datetime | None:
     d = RE_DATE.search(text)
-    if not d:
+    if not d or not jalali.is_valid(*map(int, d.groups())):
         return None
     gy, gm, gd = jalali.to_gregorian(*map(int, d.groups()))
     t = RE_TIME.search(text)
     hh, mm = (int(t.group(1)), int(t.group(2))) if t else (0, 0)
-    return datetime(gy, gm, gd, hh, mm, tzinfo=TEHRAN).isoformat()
-
-
-def parse_jdate(text: str) -> str | None:
-    d = RE_DATE.search(text)
-    return "%04d-%02d-%02d" % tuple(map(int, d.groups())) if d else None
+    try:
+        return datetime(gy, gm, gd, hh, mm, tzinfo=TEHRAN)
+    except ValueError:  # 25:99 in a malformed SMS
+        return datetime(gy, gm, gd, tzinfo=TEHRAN)
 
 
 def detect_direction(title: str, body: str) -> str | None:
@@ -101,6 +124,7 @@ class BluParser(BankParser):
     ۱۴۰۵.۰۶.۳۱
     """
     name = "blu"
+    label = "بلو"
     RE_AMOUNT = re.compile(r"([\d,]+)\s*ریال\s*(?:از|به)\s*حساب")
     RE_BALANCE = re.compile(r"موجودی\s*:?\s*(-?[\d,]+)")
 
@@ -116,6 +140,9 @@ class BluParser(BankParser):
         m = self.RE_AMOUNT.search(body)
         if not m:
             raise ParseError("amount not found")
+        amount = _int(m.group(1))
+        if not amount:
+            raise ParseError("zero amount")
         direction = detect_direction(title, body)
         if not direction:
             raise ParseError("direction unknown")
@@ -123,15 +150,15 @@ class BluParser(BankParser):
         return Tx(
             bank=self.name,
             direction=direction,
-            amount=_int(m.group(1)),
+            amount=amount,
             balance=_int(b.group(1)) if b else None,
             occurred_at=parse_datetime(body),
-            jdate=parse_jdate(body),
-            title=title or None,
+            title=title[:100],
         )
 
 
 PARSERS: list[BankParser] = [BluParser()]
+BANK_LABELS = {p.name: p.label for p in PARSERS}
 
 
 def parse(raw: str) -> tuple[Tx | None, str | None]:

@@ -1,0 +1,31 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}قانون‌ها{% endblock %}
+{% block heading %}دسته‌بندی خودکار{% endblock %}
+{% block top_action %}<a class="btn small" href="{% url 'rule_new' %}">+ قانون جدید</a>{% endblock %}
+{% block content %}
+<p class="muted small">هر تراکنش تازه با این قانون‌ها (به ترتیب اولویت) چک می‌شود و اولین قانونی که همه شرط‌هایش درست باشد، دسته را تعیین می‌کند.
+  دسته‌ای که خودتان انتخاب کرده‌اید هیچ‌وقت عوض نمی‌شود.</p>
+{% if rules %}
+<div class="card flush"><ul class="list">{% for r in rules %}
+  <li><a class="item" href="{% url 'rule_edit' r.pk %}">
+    <span class="ico">{{ r.category.icon|default:"⚙️" }}</span>
+    <span class="main">
+      <span class="t1">{{ r.category.name }}{% if not r.enabled %} <span class="pill">خاموش</span>{% endif %}</span>
+      <span class="t2">اگر
+        {% if r.direction == 'IN' %}دریافت{% elif r.direction == 'OUT' %}پرداخت{% else %}هر تراکنش{% endif %}
+        {% if r.account %}در «{{ r.account.name }}»{% endif %}
+        {% if r.text %}شامل «{{ r.text }}»{% endif %}
+        {% if r.amount_min is not None and r.amount_min == r.amount_max %}با مبلغ دقیق <span class="num">{{ r.amount_min|amount:unit }}</span>
+        {% else %}{% if r.amount_min is not None %}از <span class="num">{{ r.amount_min|amount:unit }}</span>{% endif %}
+        {% if r.amount_max is not None %}تا <span class="num">{{ r.amount_max|amount:unit }}</span>{% endif %}{% endif %}
+        · اولویت {{ r.priority|fa }}</span>
+    </span></a></li>{% endfor %}
+</ul></div>
+<form method="post" action="{% url 'rules_apply' %}" class="actions">{% csrf_token %}
+  <button class="btn secondary" type="submit">اعمال روی تراکنش‌های بدون دسته</button>
+</form>
+{% else %}
+<div class="card empty"><span class="big">⚙️</span>هنوز قانونی نساخته‌اید.<br>
+  <span class="small">مثلاً: «پرداخت با مبلغ دقیق اجاره ← اجاره و مسکن». یا در صفحه هر تراکنش، گزینه «مشابه‌ها هم همین دسته» را بزنید.</span></div>
+{% endif %}
+{% endblock %}

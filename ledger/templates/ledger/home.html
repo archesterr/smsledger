@@ -1,0 +1,59 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}خانه{% endblock %}
+{% block top_action %}<a class="btn small" href="{% url 'tx_new' %}">+ ثبت دستی</a>{% endblock %}
+{% block content %}
+{% include "ledger/_month_nav.html" %}
+
+<div class="kpis">
+  <div class="kpi"><div class="label"><span class="key s1"></span>دریافتی</div>
+    <div class="value"><span class="num">{{ totals.income|amount:unit }}</span> <span class="unit">{{ unit|unit_label }}</span></div></div>
+  <div class="kpi"><div class="label"><span class="key s2"></span>پرداختی</div>
+    <div class="value"><span class="num">{{ totals.expense|amount:unit }}</span> <span class="unit">{{ unit|unit_label }}</span></div></div>
+  <div class="kpi wide"><div class="label">مانده این ماه</div>
+    <div class="value"><span class="num">{{ totals.net|amount:unit }}</span> <span class="unit">{{ unit|unit_label }}</span></div></div>
+</div>
+
+<div class="stack" id="alerts">
+{% if not health.has_device %}
+  <a class="alert info" href="{% url 'setup' %}"><span class="ico">📱</span>
+    <div><b>راه‌اندازی آیفون</b><br><span class="small">تا گوشی را وصل نکنید، پیامک‌های بانک خودکار ثبت نمی‌شوند. چند دقیقه طول می‌کشد.</span></div></a>
+{% endif %}
+{% if health.silent %}
+  <a class="alert critical" href="{% url 'setup' %}"><span class="ico">⛔</span>
+    <div><b>چند روز است پیامکی نرسیده</b><br><span class="small">آخرین پیامک {{ health.last_sms|ago }}. اتوماسیون آیفون را بررسی کنید.</span></div></a>
+{% endif %}
+{% if health.gaps %}
+  <a class="alert warning" href="{% url 'tx_list' %}?gaps=on"><span class="ico">⚠️</span>
+    <div><b>{{ health.gaps|fa }} جای خالی در پیامک‌ها</b><br><span class="small">موجودی با تراکنش قبلی جور نیست؛ یعنی پیامکی ثبت نشده. پیامک را از بخش «وارد کردن» اضافه کنید.</span></div></a>
+{% endif %}
+{% if health.unparsed %}
+  <a class="alert warning" href="{% url 'messages' %}"><span class="ico">⚠️</span>
+    <div><b>{{ health.unparsed|fa }} پیامک خوانده نشد</b><br><span class="small">قالب این پیامک‌ها هنوز شناخته نشده. می‌توانید برای مدیر بفرستید.</span></div></a>
+{% endif %}
+{% if health.uncategorized %}
+  <a class="alert info" href="{% url 'inbox' %}"><span class="ico">📥</span>
+    <div><b>{{ health.uncategorized|fa }} تراکنش بدون دسته</b><br><span class="small">با یک لمس دسته بدهید تا گزارش‌ها دقیق شود.</span></div></a>
+{% endif %}
+</div>
+
+{% if budgets %}
+<div class="section-head"><h2>بودجه این ماه</h2><a class="small" href="{% url 'budgets' %}">همه</a></div>
+<div class="card">{% for b in budgets %}{% include "ledger/_budget.html" %}{% endfor %}</div>
+{% endif %}
+
+{% if balances %}
+<div class="section-head"><h2>موجودی حساب‌ها</h2></div>
+<div class="card flush"><ul class="list">{% for b in balances %}
+  <li><div class="item"><span class="ico">🏦</span><span class="main"><span class="t1">{{ b.account.name }}</span>
+    <span class="t2">طبق آخرین پیامک، {{ b.at|ago }}</span></span>
+    <span class="amt"><span class="num">{{ b.balance|amount:unit }}</span></span></div></li>{% endfor %}
+</ul></div>
+{% endif %}
+
+<div class="section-head"><h2>آخرین تراکنش‌ها</h2><a class="small" href="{% url 'tx_list' %}">همه</a></div>
+{% if recent %}
+<div class="card flush"><ul class="list">{% for t in recent %}{% include "ledger/_tx.html" with show_date=True %}{% endfor %}</ul></div>
+{% else %}
+<div class="card empty"><span class="big">🧾</span>هنوز تراکنشی نیست. آیفون را <a href="{% url 'setup' %}">وصل کنید</a> یا پیامک‌های قبلی را <a href="{% url 'import' %}">وارد کنید</a>.</div>
+{% endif %}
+{% endblock %}

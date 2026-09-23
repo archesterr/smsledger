@@ -1,0 +1,56 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}تراکنش‌ها{% endblock %}
+{% block top_action %}<a class="btn small" href="{% url 'tx_new' %}">+ ثبت دستی</a>{% endblock %}
+{% block content %}
+<details class="card filters"{% if filtered %} open{% endif %}>
+  <summary class="row between"><b>🔎 جستجو و فیلتر</b>{% if filtered %}<a class="small" href="{% url 'tx_list' %}">پاک کردن</a>{% endif %}</summary>
+  <form method="get" novalidate>
+    <div class="form-grid">
+      {% include "ledger/_field.html" with f=form.q full=True %}
+      <div class="field"><label for="id_month">ماه</label>
+        <input type="text" name="month" id="id_month" value="{{ form.month.value|default:'' }}" placeholder="1405-07" class="num-input" inputmode="numeric"></div>
+      {% include "ledger/_field.html" with f=form.direction %}
+      {% include "ledger/_field.html" with f=form.date_from %}
+      {% include "ledger/_field.html" with f=form.date_to %}
+      <div class="field"><label for="id_category">دسته</label>
+        <select name="category" id="id_category">
+          <option value="">همه دسته‌ها</option>
+          <option value="none"{% if form.category.value == "none" %} selected{% endif %}>بدون دسته</option>
+          {% for c in categories %}<option value="{{ c.pk }}"{% if form.category.value == c.pk|stringformat:"d" %} selected{% endif %}>{{ c.icon }} {{ c.name }}</option>{% endfor %}
+        </select></div>
+      {% include "ledger/_field.html" with f=form.account %}
+      {% include "ledger/_field.html" with f=form.amount_min %}
+      {% include "ledger/_field.html" with f=form.amount_max %}
+      {% include "ledger/_field.html" with f=form.gaps full=True %}
+    </div>
+    <p class="muted small">مبلغ‌ها به {{ unit|unit_label }} است. تاریخ مثل ۱۴۰۵/۰۷/۰۱.</p>
+    <div class="actions"><button class="btn" type="submit">اعمال</button></div>
+  </form>
+</details>
+
+<div class="totals-line">
+  <span>{{ page.paginator.count|fa }} تراکنش</span>
+  <span><span class="key s1"></span> دریافت <span class="num">{{ sum_in|amount:unit }}</span></span>
+  <span><span class="key s2"></span> پرداخت <span class="num">{{ sum_out|amount:unit }}</span></span>
+  <a href="{% url 'tx_export' %}?{{ query }}">⬇️ خروجی CSV</a>
+</div>
+
+{% if page.object_list %}
+<div class="card flush">
+  {% regroup page.object_list by jdate as days %}
+  {% for day in days %}
+    <div class="day-head">{{ day.list.0.occurred_at|jday }}</div>
+    <ul class="list">{% for t in day.list %}{% include "ledger/_tx.html" %}{% endfor %}</ul>
+  {% endfor %}
+  {% if page.has_other_pages %}
+  <div class="pagination">
+    {% if page.has_previous %}<a href="?{{ query }}&page={{ page.previous_page_number }}">صفحه قبل</a>{% else %}<span></span>{% endif %}
+    <span class="muted">صفحه {{ page.number|fa }} از {{ page.paginator.num_pages|fa }}</span>
+    {% if page.has_next %}<a href="?{{ query }}&page={{ page.next_page_number }}">صفحه بعد</a>{% else %}<span></span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="card empty"><span class="big">🔍</span>تراکنشی پیدا نشد.</div>
+{% endif %}
+{% endblock %}

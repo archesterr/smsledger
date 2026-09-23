@@ -1,0 +1,16 @@
+{% extends "ledger/base.html" %}
+{% block title %}ورود{% endblock %}
+{% block content %}
+<div class="auth">
+  <div class="brand-big">{{ site_name }}</div>
+  <p class="center muted">ثبت خودکار تراکنش‌ها از پیامک‌های بانک</p>
+  <form method="post" class="card" novalidate>{% csrf_token %}
+    {% if error %}<ul class="errorlist nonfield"><li>{{ error }}</li></ul>{% endif %}
+    {% include "ledger/_field.html" with f=form.username %}
+    {% include "ledger/_field.html" with f=form.password %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="btn block" type="submit">ورود</button>
+  </form>
+  <p class="center muted small">عضویت فقط با لینک دعوت است.</p>
+</div>
+{% endblock %}

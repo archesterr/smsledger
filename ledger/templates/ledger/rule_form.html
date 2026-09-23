@@ -1,0 +1,26 @@
+{% extends "ledger/base.html" %}
+{% block title %}قانون{% endblock %}
+{% block heading %}{% if r.pk %}ویرایش قانون{% else %}قانون جدید{% endif %}{% endblock %}
+{% block content %}
+<form method="post" class="card" novalidate>{% csrf_token %}
+  {% include "ledger/_errors.html" %}
+  {% include "ledger/_field.html" with f=form.category %}
+  <p class="muted small">شرط‌ها (هر کدام را خالی بگذارید، بررسی نمی‌شود):</p>
+  <div class="form-grid">
+    {% include "ledger/_field.html" with f=form.direction %}
+    {% include "ledger/_field.html" with f=form.account %}
+    {% include "ledger/_field.html" with f=form.text full=True %}
+    {% include "ledger/_field.html" with f=form.amount_min %}
+    {% include "ledger/_field.html" with f=form.amount_max %}
+    {% include "ledger/_field.html" with f=form.priority %}
+    {% include "ledger/_field.html" with f=form.enabled %}
+  </div>
+  <p class="muted small">برای پرداخت‌های تکراری با مبلغ ثابت (اجاره، اشتراک، قسط)، حداقل و حداکثر را برابر بگذارید.</p>
+  <div class="actions"><button class="btn" type="submit">ذخیره</button><a class="btn secondary" href="{% url 'rules' %}">انصراف</a></div>
+</form>
+{% if r.pk %}
+<form method="post" action="{% url 'rule_delete' r.pk %}" class="actions" data-confirm="قانون حذف شود؟">{% csrf_token %}
+  <button class="btn ghost" type="submit">🗑 حذف قانون</button>
+</form>
+{% endif %}
+{% endblock %}

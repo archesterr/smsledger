@@ -1,0 +1,14 @@
+.git
+.github
+**/__pycache__
+**/*.py[cod]
+*.sqlite3*
+*.db
+staticfiles/
+.venv/
+venv/
+.ruff_cache/
+deploy/.env
+deploy/backup.env
+ledger/tests/
+README.md

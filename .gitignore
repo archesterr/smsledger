@@ -1,3 +1,13 @@
 deploy/.env
+deploy/backup.env
+.env
 __pycache__/
+*.py[cod]
 *.db*
+*.sqlite3*
+staticfiles/
+.coverage
+htmlcov/
+.venv/
+venv/
+.ruff_cache/

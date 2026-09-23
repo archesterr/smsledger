@@ -1,0 +1,14 @@
+{% extends "ledger/base.html" %}
+{% block title %}دسته‌ها{% endblock %}
+{% block heading %}دسته‌ها{% endblock %}
+{% block top_action %}<a class="btn small" href="{% url 'category_new' %}">+ دسته جدید</a>{% endblock %}
+{% block content %}
+{% for label, cats in groups %}
+<h2>{{ label }}</h2>
+<div class="card flush"><ul class="list">{% for c in cats %}
+  <li><a class="item" href="{% url 'category_edit' c.pk %}"><span class="ico">{{ c.icon|default:"•" }}</span>
+    <span class="main"><span class="t1">{{ c.name }}</span>{% if c.archived %}<span class="t2">بایگانی شده</span>{% endif %}</span>
+    <span class="chev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></a></li>{% empty %}<li class="empty">دسته‌ای نیست.</li>{% endfor %}
+</ul></div>
+{% endfor %}
+{% endblock %}
