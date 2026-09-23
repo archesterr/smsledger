@@ -1,7 +1,22 @@
+{
+	# nothing needs Caddy's admin API; restart the container to apply Caddyfile changes
+	admin off
+}
+
 {$DOMAIN} {
-	encode gzip
-	# metrics only from inside (vmagent scrapes smsledger:8080/metrics directly)
-	@metrics path /metrics
+	encode zstd gzip
+
+	# a year of queued SMS is ~200 KB; Django enforces 1 MB too
+	request_body {
+		max_size 2MB
+	}
+
+	# metrics are scraped from inside the docker network (app:8000/metrics), never publicly
+	@metrics path /metrics /metrics/*
 	respond @metrics 404
-	reverse_proxy smsledger:8080
+
+	header -Server
+
+	# Caddy replaces any client-sent X-Forwarded-For, so the app can trust it for rate limiting
+	reverse_proxy app:8000
 }

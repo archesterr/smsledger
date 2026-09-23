@@ -19,6 +19,8 @@ class User(AbstractUser):
     totp_secret = models.CharField(max_length=64, blank=True)
     totp_last_step = models.BigIntegerField(default=0)  # blocks reuse of a code
 
+    REQUIRED_FIELDS = []  # no email: `createsuperuser` asks only for username + password
+
     @property
     def has_2fa(self) -> bool:
         return bool(self.totp_secret)

@@ -44,9 +44,9 @@
   {% endfor %}
   {% if page.has_other_pages %}
   <div class="pagination">
-    {% if page.has_previous %}<a href="?{{ query }}&page={{ page.previous_page_number }}">› قبلی</a>{% else %}<span></span>{% endif %}
+    {% if page.has_previous %}<a href="?{{ query }}&page={{ page.previous_page_number }}">صفحه قبل</a>{% else %}<span></span>{% endif %}
     <span class="muted">صفحه {{ page.number|fa }} از {{ page.paginator.num_pages|fa }}</span>
-    {% if page.has_next %}<a href="?{{ query }}&page={{ page.next_page_number }}">بعدی ‹</a>{% else %}<span></span>{% endif %}
+    {% if page.has_next %}<a href="?{{ query }}&page={{ page.next_page_number }}">صفحه بعد</a>{% else %}<span></span>{% endif %}
   </div>
   {% endif %}
 </div>

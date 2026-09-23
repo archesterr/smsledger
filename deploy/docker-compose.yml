@@ -1,24 +1,95 @@
+# smsledger: Postgres + Django app + Caddy (automatic HTTPS) + optional restic backups.
+#   cp .env.example .env && cp backup.env.example backup.env   # then fill both in
+#   docker compose up -d --build
+name: smsledger
+
+x-base: &base
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
 services:
-  smsledger:
-    build: ..
+  db:
+    <<: *base
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    environment:
+      POSTGRES_DB: smsledger
+      POSTGRES_USER: smsledger
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    shm_size: 128mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smsledger -d smsledger"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [internal]          # no route to the internet, not published
+
+  app:
+    <<: *base
+    build:
+      context: ..
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.13-slim}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     image: smsledger:latest
-    restart: unless-stopped
     env_file: .env
-    volumes:
-      - ledger:/data
-    expose: ["8080"]
+    environment:
+      POSTGRES_HOST: db
+    depends_on:
+      db: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    mem_limit: 512m
+    pids_limit: 200
+    networks: [internal, web]     # reachable only through Caddy; /metrics via app:8000 on "web"
 
   caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports: ["80:80", "443:443"]
+    <<: *base
+    image: ${CADDY_IMAGE:-caddy:2.10-alpine}
+    ports: ["80:80", "443:443", "443:443/udp"]
     environment:
-      DOMAIN: ${DOMAIN}
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-    depends_on: [smsledger]
+      - caddy_data:/data           # TLS certificates: keep this volume
+      - caddy_config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    depends_on: [app]
+    networks: [web]
+
+  backup:                          # enabled with COMPOSE_PROFILES=backup in .env
+    <<: *base
+    profiles: [backup]
+    build:
+      context: ./backup
+      args:
+        POSTGRES_IMAGE: ${POSTGRES_IMAGE:-postgres:17-alpine}
+        RESTIC_IMAGE: ${RESTIC_IMAGE:-restic/restic:0.18.1}
+    image: smsledger-backup:latest
+    env_file: backup.env           # backup credentials never enter the app container
+    environment:
+      PGHOST: db
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Asia/Tehran
+    depends_on:
+      db: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    networks: [internal, egress]
+
+networks:
+  internal: {internal: true}
+  web: {}
+  egress: {}                       # backup needs to reach the offsite repository
 
 volumes:
-  ledger:
+  pgdata:
   caddy_data:
+  caddy_config:

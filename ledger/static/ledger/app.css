@@ -149,6 +149,11 @@ main { max-width: 760px; margin: 0 auto; padding: 16px; }
   background: var(--surface); color: var(--ink); text-decoration: none; font-size: 18px;
 }
 .month-nav span.off { opacity: .35; }
+/* arrows are SVG: text glyphs like ‹ › get bidi-mirrored inconsistently in RTL */
+.ic { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round; display: block; }
+.chev { color: var(--muted); flex: none; }
+.chev .ic { width: 16px; height: 16px; }
 
 /* ---- stat tiles (KPI row) ---- */
 .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
