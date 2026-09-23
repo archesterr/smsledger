@@ -8,6 +8,8 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: monthly}
+    groups:                         # one PR: separate ones conflict (the actions sit on adjacent lines)
+      actions: {patterns: ["*"]}
   - package-ecosystem: docker
     directory: /
     schedule: {interval: weekly}
@@ -17,3 +19,7 @@ updates:
   - package-ecosystem: docker-compose
     directory: /deploy
     schedule: {interval: weekly}
+    ignore:
+      # a new Postgres major can't start on the old data directory: that upgrade is a manual dump/restore
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
