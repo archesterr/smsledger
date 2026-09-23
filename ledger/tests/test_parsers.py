@@ -129,3 +129,112 @@ class TestTxJson(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# Real samples (1405-07-01), sent by the owner. Deposit variants are guesses from the same layout:
+# replace them with real ones when available.
+REF = datetime(2026, 9, 23, 21, 0, tzinfo=parsers.TEHRAN)  # 1405-07-01 21:00
+
+BLU_REAL = """بلو
+برداشت پول
+آرمین عزیز، 1,000,000 ریال از حساب شما پرید.
+موجودی: 1,887,139 ریال
+۲۰:۲۵
+۱۴۰۵.۰۷.۰۱"""
+
+SAMAN_OUT = """بانك سامان
+برداشت مبلغ 20,000,000 انتقال وجه
+از ‪884-800-4076959-1‬
+مانده 36,634,778
+1405/7/1
+18:50:02"""
+
+KHAV_OUT = """بانک خاورمیانه
+خرید با کارت 0947
+-4,450,000
+020/000790644
+مانده 63,295,053
+06/31
+20:35"""
+
+PASARGAD_OUT = """777.888.19516768.1
+-3,200,000
+07/01_16:55
+مانده: 1,178,259"""
+
+MELLI_OUT = """بانك ملي ايران
+انتقال:80,035,500-
+حساب:97007
+مانده:35,206,324
+0629-18:26"""
+
+
+class TestOtherBanks(unittest.TestCase):
+    def check(self, raw, bank, direction, amount, balance, when, title, account):
+        tx, err = parsers.parse(raw, REF)
+        self.assertIsNone(err, err)
+        self.assertEqual((tx.bank, tx.direction, tx.amount, tx.balance), (bank, direction, amount, balance))
+        self.assertEqual(tx.occurred_at.isoformat(), when)
+        self.assertEqual((tx.title, tx.account), (title, account))
+
+    def test_real_samples(self):
+        self.check(BLU_REAL, "blu", "OUT", 1_000_000, 1_887_139, "2026-09-23T20:25:00+03:30", "برداشت پول", "")
+        self.check(SAMAN_OUT, "saman", "OUT", 20_000_000, 36_634_778, "2026-09-23T18:50:00+03:30",
+                   "انتقال وجه", "9591")
+        self.check(KHAV_OUT, "khavarmianeh", "OUT", 4_450_000, 63_295_053, "2026-09-22T20:35:00+03:30",
+                   "خرید با کارت", "0644")
+        self.check(PASARGAD_OUT, "pasargad", "OUT", 3_200_000, 1_178_259, "2026-09-23T16:55:00+03:30",
+                   "برداشت", "7681")
+        self.check(MELLI_OUT, "melli", "OUT", 80_035_500, 35_206_324, "2026-09-20T18:26:00+03:30",
+                   "انتقال", "7007")
+
+    def test_deposits(self):
+        self.check(SAMAN_OUT.replace("برداشت مبلغ", "واریز مبلغ").replace("از ", "به "), "saman", "IN",
+                   20_000_000, 36_634_778, "2026-09-23T18:50:00+03:30", "انتقال وجه", "9591")
+        self.check(KHAV_OUT.replace("خرید با کارت 0947", "واریز").replace("-4,450,000", "+4,450,000"),
+                   "khavarmianeh", "IN", 4_450_000, 63_295_053, "2026-09-22T20:35:00+03:30", "واریز", "0644")
+        self.check(PASARGAD_OUT.replace("-3,200,000", "+3,200,000"), "pasargad", "IN", 3_200_000, 1_178_259,
+                   "2026-09-23T16:55:00+03:30", "واریز", "7681")
+        self.check(MELLI_OUT.replace("انتقال:80,035,500-", "واریز:80,035,500+"), "melli", "IN", 80_035_500,
+                   35_206_324, "2026-09-20T18:26:00+03:30", "واریز", "7007")
+
+    def test_unsigned_amount_falls_back_to_title(self):
+        self.check(MELLI_OUT.replace("انتقال:80,035,500-", "خرید:80,035,500"), "melli", "OUT", 80_035_500,
+                   35_206_324, "2026-09-20T18:26:00+03:30", "خرید", "7007")
+
+    def test_broken_layouts_are_unparsed_not_wrong(self):
+        for raw in (SAMAN_OUT.replace("مبلغ 20,000,000", "مبلغ"),
+                    KHAV_OUT.replace("-4,450,000", ""),
+                    PASARGAD_OUT.replace("-3,200,000", "سلام"),
+                    MELLI_OUT.replace("انتقال:80,035,500-", "انتقال:80,035,500+-")):
+            tx, err = parsers.parse(raw, REF)
+            self.assertIsNone(tx, raw)
+            self.assertTrue(err)
+
+    def test_pasargad_needs_its_account_format(self):
+        # a message whose first line is just some number must not be taken for Pasargad
+        tx, err = parsers.parse("12345\n-3,200,000\n07/01_16:55", REF)
+        self.assertEqual((tx, err), (None, "no parser matched"))
+
+    def test_full_account_numbers_are_not_kept_as_hint(self):
+        self.assertEqual(parsers.last4("884-800-4076959-1"), "9591")
+        self.assertEqual(parsers.last4("777.888.19516768.1"), "7681")
+
+
+class TestYearInference(unittest.TestCase):
+    def test_same_year(self):
+        self.assertEqual(parsers.infer_datetime(6, 31, 20, 35, REF).isoformat(), "2026-09-22T20:35:00+03:30")
+
+    def test_new_year_rollover(self):
+        # an Esfand SMS read in Farvardin belongs to last year
+        ref = datetime(2026, 3, 23, 12, 0, tzinfo=parsers.TEHRAN)  # 1405-01-03
+        self.assertEqual(parsers.infer_datetime(12, 29, 10, 0, ref).date().isoformat(), "2026-03-20")  # 1404-12-29
+
+    def test_tomorrow_allowed_for_clock_skew_but_not_later(self):
+        self.assertEqual(parsers.infer_datetime(7, 2, 0, 30, REF).date().isoformat(), "2026-09-24")
+        self.assertEqual(parsers.infer_datetime(7, 5, 0, 0, REF).date().isoformat(), "2025-09-27")  # 1404-07-05
+
+    def test_invalid_dates(self):
+        self.assertIsNone(parsers.infer_datetime(13, 1, ref=REF))
+        self.assertIsNone(parsers.infer_datetime(7, 31, ref=REF))  # Mehr has 30 days
+        self.assertEqual(parsers.infer_datetime(6, 31, 25, 99, REF).isoformat(), "2026-09-22T00:00:00+03:30")

@@ -170,7 +170,7 @@ def reparse(user=None) -> dict:
             m.delete()
             purged += 1
             continue
-        tx, err = parsers.parse(m.raw)
+        tx, err = parsers.parse(m.raw, ref=m.received_at)  # year for banks that send none
         if not tx:
             if m.error != (err or ""):
                 Message.objects.filter(pk=m.pk).update(error=(err or "")[:200])

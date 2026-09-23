@@ -5,9 +5,12 @@ Each iPhone forwards its bank SMS through a Shortcut; the server parses them int
 and each person gets a Persian (RTL) web app with categories, budgets, reports and CSV export.
 Invite-only, per-user isolation, 2FA, no OTP ever stored.
 
+Banks: **Blu, Saman, Middle East Bank (خاورمیانه), Pasargad, Melli**. SMS from other banks are
+kept and parsed automatically once their template is added.
+
 ```
 iPhone (each user)                                  Server (docker compose)
- Message automation (bank sender, "ریال")
+ Message automation (bank sender, "موجودی"/"مانده")
   └─ Shortcut "SMS to Ledger"
        1. drop OTP / login-code SMS on the phone
        2. append SMS to iCloud queue file ───── offline? sent by the nightly "Sync" shortcut
@@ -30,7 +33,7 @@ iOS gives apps no access to SMS. The only hook is the Shortcuts **Message** auto
 | 17+ | fully automatic, silent ("Run Immediately") | automatic |
 | 14 – 16 | a notification appears; **tap it** (Apple's rule, no workaround except a Mac relay) | automatic on 15.4+ |
 
-A missed tap is not silent: every Blu SMS carries the balance, so the next SMS shows a
+A missed tap is not silent: every supported bank's SMS carries the balance, so the next SMS shows a
 **balance gap** with the missing amount, and the user pastes the missed SMS into the app.
 
 ---
@@ -127,8 +130,9 @@ Everything is explained in Persian inside the app, with the user's own server UR
    - **Text**: *Shortcut Input* + a line `---` → **Append to Text File** `smsledger/queue.txt`
    - **Get Contents of URL**: `POST https://tx.yourdomain.ir/ingest?source=iphone`,
      header `Authorization: Bearer <device key>`, JSON body `{"sms": Shortcut Input}`
-4. **Automation**: Message → sender = bank contact(s), contains `ریال` → Run Shortcut
-   (iOS 17+: *Run Immediately*, *Notify When Run* off).
+4. **Automation**: Message → sender = bank contact(s), contains the bank's balance word →
+   Run Shortcut (iOS 17+: *Run Immediately*, *Notify When Run* off). One automation per word:
+   `موجودی` for Blu, `مانده` for Saman, Middle East Bank, Pasargad and Melli.
 5. **Shortcut "Sync SMS Queue"** + a daily 03:00 automation: posts `queue.txt` to
    `/ingest?split=1&source=queue` and deletes the file only if the response has a `status` key
    (errors never contain one, so a failed sync keeps the queue).
@@ -224,7 +228,8 @@ and unparsed SMS, all on the home page.
 2. Add a `BankParser` subclass in `ledger/parsers.py` (see `BluParser`), append it to
    `PARSERS`, and put 2–3 real, anonymized samples (withdrawal, deposit, transfer) in
    `ledger/tests/test_parsers.py`. If the SMS carries a masked account/card number, return it
-   as `Tx.account` so each account gets its own balance chain.
+   as `Tx.account` (only its last 4 digits, via `last4`) so each account gets its own balance
+   chain. If the bank sends no year, use `infer_datetime(month, day, h, m, ref)`.
 3. Deploy. Existing unparsed SMS of every user are re-parsed automatically.
 
 ---

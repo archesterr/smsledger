@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from . import jalali
 
@@ -19,7 +19,7 @@ _CHARS = str.maketrans({"ي": "ی", "ك": "ک", "٬": ",", "：": ":"})
 _INVISIBLE = re.compile(r"[‌‍‎‏؜‪-‮⁦-⁩﻿]")
 
 # One-time passwords and login codes must never be stored or forwarded. Dynamic-password SMS
-# usually contain the amount in ریال, so the Shortcut's "contains ریال" filter doesn't stop them.
+# usually contain the amount, so the Shortcut's "contains موجودی/مانده" filter doesn't stop them.
 # Kept deliberately broad: a dropped real transaction still shows up as a balance gap.
 # Not bare "پویا": it's a common first name ("انتقال به پویا ..."); "رمز پویا" is caught by رمز.
 _SENSITIVE = re.compile(
@@ -78,7 +78,8 @@ class BankParser:
     def match(self, text: str) -> bool:
         raise NotImplementedError
 
-    def parse(self, text: str) -> Tx:
+    def parse(self, text: str, ref: datetime | None = None) -> Tx:
+        """ref: when the SMS was received; banks that send no year get it from here."""
         raise NotImplementedError
 
 
@@ -101,6 +102,44 @@ def parse_datetime(text: str) -> datetime | None:
         return datetime(gy, gm, gd, hh, mm, tzinfo=TEHRAN)
     except ValueError:  # 25:99 in a malformed SMS
         return datetime(gy, gm, gd, tzinfo=TEHRAN)
+
+
+def infer_datetime(month: int, day: int, hh: int = 0, mm: int = 0, ref: datetime | None = None) -> datetime | None:
+    """For SMS that carry month/day but no year: the latest such date not after the day the SMS
+    arrived (so a 12/29 SMS read on 1/02 belongs to last year)."""
+    ref = (ref or datetime.now(TEHRAN)).astimezone(TEHRAN)
+    this_year = jalali.from_date(ref.date())[0]
+    for jy in (this_year, this_year - 1):
+        if not jalali.is_valid(jy, month, day):
+            continue
+        gy, gm, gd = jalali.to_gregorian(jy, month, day)
+        try:
+            dt = datetime(gy, gm, gd, hh, mm, tzinfo=TEHRAN)
+        except ValueError:
+            dt = datetime(gy, gm, gd, tzinfo=TEHRAN)
+        if dt <= ref + timedelta(days=1):  # a day of slack for clock skew
+            return dt
+    return None
+
+
+# "-4,450,000", "+500,000", "80,035,500-" (sign before or after, or none)
+RE_SIGNED = re.compile(r"^([-+]?)\s*([\d,]*\d)\s*([-+]?)$")
+RE_BALANCE = re.compile(r"مانده\s*:?\s*(-?[\d,]+)")
+
+
+def signed_amount(s: str) -> tuple[int, str | None] | None:
+    """(amount, "OUT"/"IN"/None) from a signed number, or None if s isn't one."""
+    m = RE_SIGNED.match(s.strip())
+    if not m or (m.group(1) and m.group(3)):
+        return None
+    sign = m.group(1) or m.group(3)
+    return _int(m.group(2)), {"-": "OUT", "+": "IN"}.get(sign)
+
+
+def last4(account: str) -> str:
+    """Account numbers become a short hint: enough to tell two accounts apart, not the full number."""
+    digits = re.sub(r"\D", "", account)
+    return digits[-4:]
 
 
 def detect_direction(title: str, body: str) -> str | None:
@@ -132,7 +171,7 @@ class BluParser(BankParser):
         first = text.split("\n", 1)[0]
         return first.strip() in ("بلو", "blu", "Blu") or first.startswith("بلو")
 
-    def parse(self, text: str) -> Tx:
+    def parse(self, text: str, ref: datetime | None = None) -> Tx:
         lines = text.split("\n")
         title = lines[1] if len(lines) > 1 else ""
         body = "\n".join(lines[2:])
@@ -157,17 +196,169 @@ class BluParser(BankParser):
         )
 
 
-PARSERS: list[BankParser] = [BluParser()]
+def _require(amount: int | None, direction: str | None) -> None:
+    if not amount:
+        raise ParseError("amount not found")
+    if not direction:
+        raise ParseError("direction unknown")
+
+
+def _balance(text: str) -> int | None:
+    b = RE_BALANCE.search(text)
+    return _int(b.group(1)) if b else None
+
+
+# ---- Saman ------------------------------------------------------------------
+class SamanParser(BankParser):
+    """
+    بانك سامان
+    برداشت مبلغ 20,000,000 انتقال وجه
+    از 884-800-4076959-1
+    مانده 36,634,778
+    1405/7/1
+    18:50:02
+    """
+    name = "saman"
+    label = "سامان"
+    RE_AMOUNT = re.compile(r"^(برداشت|واریز)\s*مبلغ\s*([\d,]+)\s*(.*)$", re.M)
+    RE_ACCOUNT = re.compile(r"^(?:از|به)\s*([\d-]{6,})\s*$", re.M)
+
+    def match(self, text: str) -> bool:
+        return text.startswith("بانک سامان")
+
+    def parse(self, text: str, ref: datetime | None = None) -> Tx:
+        m = self.RE_AMOUNT.search(text)
+        if not m:
+            raise ParseError("amount not found")
+        kind, amount, reason = m.group(1), _int(m.group(2)), m.group(3).strip()
+        direction = "OUT" if kind == "برداشت" else "IN"
+        _require(amount, direction)
+        acc = self.RE_ACCOUNT.search(text)
+        return Tx(bank=self.name, direction=direction, amount=amount, balance=_balance(text),
+                  occurred_at=parse_datetime(text), title=(reason or kind)[:100],
+                  account=last4(acc.group(1)) if acc else "")
+
+
+# ---- Middle East Bank (خاورمیانه) ------------------------------------------------
+class KhavarmianehParser(BankParser):
+    """
+    بانک خاورمیانه
+    خرید با کارت 0947
+    -4,450,000
+    020/000790644
+    مانده 63,295,053
+    06/31          (month/day, no year)
+    20:35
+    """
+    name = "khavarmianeh"
+    label = "خاورمیانه"
+    RE_ACCOUNT = re.compile(r"^(\d{2,4}/\d{5,})$", re.M)
+    RE_MD = re.compile(r"^(\d{1,2})/(\d{1,2})$", re.M)
+    RE_HM = re.compile(r"^(\d{1,2}):(\d{2})$", re.M)
+
+    def match(self, text: str) -> bool:
+        return text.startswith("بانک خاورمیانه")
+
+    def parse(self, text: str, ref: datetime | None = None) -> Tx:
+        lines = text.split("\n")
+        title = re.sub(r"\s*\d{4}$", "", lines[1]) if len(lines) > 1 else ""  # drop the card number
+        amount = direction = None
+        for ln in lines[2:]:
+            sa = signed_amount(ln)
+            if sa:
+                amount, direction = sa
+                break
+        direction = direction or detect_direction(title, "")
+        _require(amount, direction)
+        acc = self.RE_ACCOUNT.search(text)
+        md, hm = self.RE_MD.search(text), self.RE_HM.search(text)
+        when = None
+        if md:
+            h, mi = (int(hm.group(1)), int(hm.group(2))) if hm else (0, 0)
+            when = infer_datetime(int(md.group(1)), int(md.group(2)), h, mi, ref)
+        return Tx(bank=self.name, direction=direction, amount=amount, balance=_balance(text),
+                  occurred_at=when, title=title[:100], account=last4(acc.group(1)) if acc else "")
+
+
+# ---- Pasargad -------------------------------------------------------------------
+class PasargadParser(BankParser):
+    """No bank name in the SMS: recognised by its account number format on the first line.
+    777.888.19516768.1
+    -3,200,000
+    07/01_16:55     (month/day_time, no year)
+    مانده: 1,178,259
+    """
+    name = "pasargad"
+    label = "پاسارگاد"
+    RE_FIRST = re.compile(r"^\d{2,4}\.\d{2,4}\.\d{4,12}\.\d{1,2}$")
+    RE_WHEN = re.compile(r"^(\d{1,2})/(\d{1,2})[_ ](\d{1,2}):(\d{2})$", re.M)
+
+    def match(self, text: str) -> bool:
+        return bool(self.RE_FIRST.match(text.split("\n", 1)[0]))
+
+    def parse(self, text: str, ref: datetime | None = None) -> Tx:
+        lines = text.split("\n")
+        sa = signed_amount(lines[1]) if len(lines) > 1 else None
+        if not sa:
+            raise ParseError("amount not found")
+        amount, direction = sa
+        _require(amount, direction)
+        w = self.RE_WHEN.search(text)
+        when = infer_datetime(*map(int, w.groups()), ref=ref) if w else None
+        return Tx(bank=self.name, direction=direction, amount=amount, balance=_balance(text),
+                  occurred_at=when, title="برداشت" if direction == "OUT" else "واریز",
+                  account=last4(lines[0]))
+
+
+# ---- Melli ----------------------------------------------------------------------
+class MelliParser(BankParser):
+    """
+    بانك ملي ايران
+    انتقال:80,035,500-
+    حساب:97007
+    مانده:35,206,324
+    0629-18:26      (MMDD-time, no year)
+    """
+    name = "melli"
+    label = "ملی"
+    RE_LINE = re.compile(r"^([^\d:]+?)\s*:\s*([-+]?\s*[\d,]+\s*[-+]?)$")
+    RE_ACCOUNT = re.compile(r"^حساب\s*:\s*(\d+)", re.M)
+    RE_WHEN = re.compile(r"^(\d{2})(\d{2})-(\d{1,2}):(\d{2})$", re.M)
+    NOT_AMOUNT = ("حساب", "مانده", "کارت")
+
+    def match(self, text: str) -> bool:
+        return text.startswith("بانک ملی")
+
+    def parse(self, text: str, ref: datetime | None = None) -> Tx:
+        title = amount = direction = None
+        for ln in text.split("\n")[1:]:
+            m = self.RE_LINE.match(ln)
+            if m and not m.group(1).startswith(self.NOT_AMOUNT):
+                sa = signed_amount(m.group(2))
+                if sa:
+                    title, (amount, direction) = m.group(1).strip(), sa
+                    break
+        direction = direction or detect_direction(title or "", "")
+        _require(amount, direction)
+        acc = self.RE_ACCOUNT.search(text)
+        w = self.RE_WHEN.search(text)
+        when = infer_datetime(*map(int, w.groups()), ref=ref) if w else None
+        return Tx(bank=self.name, direction=direction, amount=amount, balance=_balance(text),
+                  occurred_at=when, title=(title or "")[:100], account=last4(acc.group(1)) if acc else "")
+
+
+PARSERS: list[BankParser] = [BluParser(), SamanParser(), KhavarmianehParser(), PasargadParser(), MelliParser()]
 BANK_LABELS = {p.name: p.label for p in PARSERS}
 
 
-def parse(raw: str) -> tuple[Tx | None, str | None]:
-    """Returns (tx, error). Never raises: unknown/broken SMS still gets stored as unparsed."""
+def parse(raw: str, ref: datetime | None = None) -> tuple[Tx | None, str | None]:
+    """Returns (tx, error). Never raises: unknown/broken SMS still gets stored as unparsed.
+    ref = when the SMS was received (default now); used by banks that send no year."""
     text = normalize(raw)
     for p in PARSERS:
         if p.match(text):
             try:
-                return p.parse(text), None
+                return p.parse(text, ref), None
             except ParseError as e:
                 return None, f"{p.name}: {e}"
     return None, "no parser matched"
