@@ -1,0 +1,7 @@
+{$DOMAIN} {
+	encode gzip
+	# metrics only from inside (vmagent scrapes smsledger:8080/metrics directly)
+	@metrics path /metrics
+	respond @metrics 404
+	reverse_proxy smsledger:8080
+}
