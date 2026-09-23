@@ -31,9 +31,15 @@ jobs:
       SECRET_KEY: ci-only-not-a-secret-0123456789-abcdefghijklmnopqrstuvwxyz
     steps:
       - uses: actions/checkout@v7
+      - name: Python version from the Dockerfile
+        id: py
+        run: |
+          v=$(sed -nE 's/^FROM python:([0-9]+\.[0-9]+).*/\1/p' Dockerfile)
+          test -n "$v" || { echo "::error::no 'FROM python:X.Y' line in Dockerfile"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: ${{ steps.py.outputs.version }}
           cache: pip
       - name: Install (hash-pinned)
         run: |

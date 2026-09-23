@@ -99,16 +99,16 @@ docker compose exec app python manage.py invite --note "Ali"   # or use the staf
 
 ### Iran servers: Docker Hub and PyPI
 
-Docker Hub refuses Iranian IPs. Either add a registry mirror to the Docker daemon
-(simplest, covers every image):
+Docker Hub refuses Iranian IPs. Add a registry mirror to the Docker daemon; it covers
+every image, including the ones the Dockerfiles build from:
 
 ```json
 // /etc/docker/daemon.json  then: systemctl restart docker
 { "registry-mirrors": ["https://docker.arvancloud.ir"] }
 ```
 
-or set `PYTHON_IMAGE`, `POSTGRES_IMAGE`, `CADDY_IMAGE`, `RESTIC_IMAGE` in `.env` to mirrored
-names (examples in `.env.example`). If PyPI is unreachable during the build, set
+Image names are written out in full (not variables) so Dependabot can keep them updated.
+If PyPI is unreachable during the build, set
 `PIP_INDEX_URL` to a PyPI mirror; hashes are still verified, so a mirror can't swap packages.
 
 ---

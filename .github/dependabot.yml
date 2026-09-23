@@ -10,12 +10,16 @@ updates:
     schedule: {interval: monthly}
     groups:                         # one PR: separate ones conflict (the actions sit on adjacent lines)
       actions: {patterns: ["*"]}
+  # FROM lines must stay literal (no ARG variables) or Dependabot can't see them.
   - package-ecosystem: docker
-    directory: /
+    directories: [/, /deploy/backup]
     schedule: {interval: weekly}
-  - package-ecosystem: docker
-    directory: /deploy/backup
-    schedule: {interval: weekly}
+    groups:                         # restic + postgres in backup/Dockerfile come as one PR
+      images: {patterns: ["*"]}
+    ignore:
+      # pg_dump must match the db's major, and that upgrade is manual (see docker-compose below)
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker-compose
     directory: /deploy
     schedule: {interval: weekly}
