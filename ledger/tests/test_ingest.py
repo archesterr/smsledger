@@ -152,6 +152,12 @@ class TestReparseAndLegacy(BaseTest):
         super().setUp()
         self.user = make_user()
 
+    def test_typed_shortcut_input_placeholder_is_not_stored(self):
+        for raw in ("Shortcut Input", " shortcut input ", "ورودی میان\u200cبر"):
+            r = ingest.ingest_one(self.user, raw, "iphone")
+            self.assertEqual((r["status"], r["reason"]), ("ignored", "placeholder"), raw)
+        self.assertFalse(Message.objects.exists())
+
     def test_reparse_after_new_parser(self):
         raw = "بانک تست\nبرداشت\n2,000 ریال از حساب شما\nموجودی: 8,000"
         self.assertEqual(ingest.ingest_one(self.user, raw, "t")["status"], "unparsed")

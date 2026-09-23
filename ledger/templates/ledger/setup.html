@@ -53,6 +53,8 @@
 {% endif %}
   <p class="muted small">برنامه <b>Shortcuts</b> ← زبانه Shortcuts ← دکمه <b>+</b> ← اسم: <b>SMS to Ledger</b>. این کارها را به ترتیب اضافه کنید:</p>
   <p class="muted small">تنظیماتی مثل Method، Headers، Case Sensitive و Make New Line زیر <b>Show More</b> یا فلش <b>(›)</b> کنار هر کار پنهان است؛ اول آن را بزنید.</p>
+  <div class="alert warning"><span class="ico">⚠️</span><div><b>Shortcut Input را تایپ نکنید.</b> روی جای خالی بزنید، و از نوار بالای کیبورد
+    <b>Shortcut Input</b> را انتخاب کنید تا به شکل یک دکمه آبی دربیاید. اگر تایپش کنید، به جای پیامک خود کلمه «Shortcut Input» فرستاده می‌شود.</div></div>
   <ol class="steps">
     <li><b>Match Text</b> — متن: <i>Shortcut Input</i> · الگو (Pattern):
       <code class="token" id="otp-pattern">رمز(?!\s*ارز)|یک.?بار|کد.?(تایید|تأیید|ورود|فعال|پویا)|OTP</code>
@@ -113,7 +115,9 @@
   <p class="muted small">اسم دکمه‌ها ممکن است بین نسخه‌های فرعی کمی فرق کند؛ اگر چیزی را پیدا نکردید، دنبال همان کلمه در صفحه بگردید.</p>
   </details>
 
-  <p class="muted small">آزمایش: در Shortcuts میان‌بر «SMS to Ledger» را یک بار دستی اجرا کنید، بعد <a href="{% url 'setup' %}">این صفحه را تازه کنید</a>.</p>
+  <p class="muted small"><b>آزمایش با یک پیامک واقعی:</b> جزئیات میان‌بر (ⓘ) ← <b>Show in Share Sheet</b> را روشن کنید؛ بالای میان‌بر خط
+    <b>If there's no input</b> ظاهر می‌شود ← آن را <b>Get Clipboard</b> بگذارید. حالا یک پیامک بانک را کپی کنید (نگه دارید ← Copy)
+    و میان‌بر را دستی اجرا کنید، بعد <a href="{% url 'home' %}">صفحه خانه</a> را ببینید. با همین روش پیامک‌های قدیمی را هم می‌شود یکی‌یکی فرستاد.</p>
   <p class="muted small">اگر لمسی جا بماند، صفحه «خانه» جای خالی را از روی موجودی پیدا می‌کند و خبر می‌دهد؛ پیامک را از <a href="{% url 'import' %}">وارد کردن پیامک</a> اضافه کنید.</p>
 </div>
 
