@@ -1,7 +1,7 @@
 # App image. On an Iran VPS Docker Hub / PyPI may be blocked: use a Docker registry mirror and
 # PIP_INDEX_URL (see README, "Iran servers"). The FROM line stays literal so Dependabot can
 # update it, and CI runs the tests on the same Python version.
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 ARG PIP_INDEX_URL=https://pypi.org/simple
 ENV PYTHONDONTWRITEBYTECODE=1 \

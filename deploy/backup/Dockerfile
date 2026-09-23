@@ -1,5 +1,5 @@
 # restic is copied from its official, version-pinned image (no package repos needed at build).
-FROM restic/restic:0.18.1 AS restic
+FROM restic/restic:0.19.1 AS restic
 
 # pg_dump must be the same Postgres major as the db service in docker-compose.yml
 FROM postgres:17-alpine
