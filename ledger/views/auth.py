@@ -1,6 +1,7 @@
 import time
 from urllib.parse import urlencode
 
+from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_not_required
 from django.db import transaction
@@ -96,6 +97,9 @@ def logout_view(request):
 @login_not_required
 def admin_login(request):
     """Django admin's own login would skip 2FA: send it through ours."""
+    if request.user.is_authenticated and request.user.is_staff and not request.user.has_2fa:
+        messages.warning(request, "برای دسترسی مدیر، اول ورود دو مرحله‌ای را روشن کنید.")
+        return redirect("twofa_setup")
     return redirect(f"{reverse('login')}?{urlencode({'next': request.GET.get('next', '/admin/')})}")
 
 

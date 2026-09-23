@@ -21,10 +21,11 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 DEBUG = env_bool("DEBUG")
 SECRET_KEY = env("SECRET_KEY")
-if len(SECRET_KEY) < 32:
+if len(SECRET_KEY) < 50:  # Django's own deploy check (security.W009) wants >= 50
     if not (DEBUG or TESTING):
-        raise ImproperlyConfigured("SECRET_KEY must be set (>=32 chars): openssl rand -base64 48")
-    SECRET_KEY = "insecure-dev-only-key-" + "x" * 32
+        raise ImproperlyConfigured(
+            'SECRET_KEY must be set (>= 50 chars): python3 -c "import secrets; print(secrets.token_urlsafe(48))"')
+    SECRET_KEY = "insecure-dev-only-key-" + "0123456789abcdefghijklmnopqrstuvwxyz"
 
 DOMAIN = env("DOMAIN", "localhost")
 SITE_NAME = env("SITE_NAME", "دخل و خرج")
@@ -42,7 +43,7 @@ INVITE_DAYS = int(env("INVITE_DAYS", "7"))
 SILENT_DAYS = int(env("SILENT_DAYS", "3"))
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "config.admin.LedgerAdminConfig",  # django.contrib.admin with a 2FA-only site
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

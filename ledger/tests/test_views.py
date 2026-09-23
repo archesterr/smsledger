@@ -419,3 +419,29 @@ class TestOps(BaseTest):
         sw = self.client.get("/sw.js")
         self.assertEqual(sw["Content-Type"], "application/javascript")
         self.assertIn("smsledger-", sw.content.decode())
+
+
+class TestAdminSite(BaseTest):
+    def test_admin_requires_2fa_and_hides_money(self):
+        boss = make_user("boss", is_staff=True, is_superuser=True)
+        self.login(boss)
+        r = self.client.get("/admin/")
+        self.assertEqual(r.status_code, 302)  # to admin login ...
+        self.assertEqual(self.client.get(r["Location"])["Location"], "/settings/2fa/")  # ... which asks for 2FA
+        boss.totp_secret = security.totp_new_secret()
+        boss.save()
+        self.assertEqual(self.client.get("/admin/").status_code, 200)
+        for model in ("transaction", "message", "category", "rule", "budget", "account"):
+            self.assertEqual(self.client.get(f"/admin/ledger/{model}/").status_code, 404, model)
+        self.assertEqual(self.client.get("/admin/ledger/invite/add/").status_code, 403)
+        self.assertEqual(self.client.get("/admin/ledger/device/add/").status_code, 403)
+
+    def test_category_delete_clears_marker(self):
+        u = make_user()
+        seed(u, 1)
+        cat = Category.objects.filter(user=u).first()
+        Transaction.objects.filter(user=u).update(category=cat, category_by="user")
+        self.login(u)
+        self.client.post(f"/categories/{cat.pk}/delete/")
+        t = Transaction.objects.get(user=u)
+        self.assertEqual((t.category_id, t.category_by), (None, ""))

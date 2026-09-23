@@ -19,7 +19,7 @@ COPY config/ config/
 COPY ledger/ ledger/
 COPY deploy/entrypoint.sh /usr/local/bin/entrypoint
 RUN chmod 0755 /usr/local/bin/entrypoint \
- && SECRET_KEY=build-time-collectstatic-only-not-a-real-secret python manage.py collectstatic --noinput -v0
+ && SECRET_KEY=build-time-collectstatic-only-not-a-real-secret-0123456789abcdef python manage.py collectstatic --noinput -v0
 
 # nobody:nogroup; the root filesystem is mounted read-only in docker-compose.yml
 USER 65534:65534

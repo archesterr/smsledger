@@ -23,11 +23,17 @@ class InviteAdmin(admin.ModelAdmin):
     list_display = ("note", "created_at", "expires_at", "used_by", "used_at")
     readonly_fields = ("code_hash", "created_by", "used_by", "used_at")
 
+    def has_add_permission(self, request):  # codes are generated: staff page or `manage.py invite`
+        return False
+
 
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
     list_display = ("user", "name", "token_prefix", "created_at", "last_used_at", "revoked_at")
     readonly_fields = ("user", "token_hash", "token_prefix", "created_at", "last_used_at")
+
+    def has_add_permission(self, request):  # tokens are generated on the user's setup page
+        return False
 
 
 @admin.register(SupportSample)

@@ -328,7 +328,9 @@ def category_edit(request, pk=None):
 @require_POST
 def category_delete(request, pk):
     c = get_object_or_404(Category, pk=pk, user=request.user)
-    c.delete()  # its transactions become uncategorized and show up in the inbox again
+    with transaction.atomic():
+        Transaction.objects.filter(user=request.user, category=c).update(category_by="")
+        c.delete()  # its transactions become uncategorized and show up in the inbox again
     messages.success(request, "دسته حذف شد.")
     return redirect("categories")
 
