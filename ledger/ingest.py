@@ -15,6 +15,9 @@ log = logging.getLogger(__name__)
 
 SPLIT_RE = re.compile(r"^\s*---\s*$", re.M)
 MAX_SMS_CHARS = 2000
+# What arrives when the Shortcut has the words typed in instead of the blue variable
+# (English and Persian iOS). Not an SMS: rejected with a hint instead of stored as "unparsed".
+PLACEHOLDERS = {"shortcut input", "ورودی میانبر", "ورودی میان بر"}
 
 
 class Batch:
@@ -61,6 +64,9 @@ def ingest_one(user, raw: str, source: str, device=None, batch: Batch | None = N
     raw = (raw or "").strip()[:MAX_SMS_CHARS]
     if not raw:
         return {"status": "empty"}
+    if parsers.normalize(raw).casefold() in PLACEHOLDERS:
+        return {"status": "ignored", "reason": "placeholder",
+                "hint": "Shortcut Input must be the blue variable, not typed text"}
     if parsers.is_sensitive(raw):
         # never stored, never logged: not even the hash
         return {"status": "ignored", "reason": "sensitive"}
