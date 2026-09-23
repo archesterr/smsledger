@@ -13,7 +13,7 @@ x-base: &base
 services:
   db:
     <<: *base
-    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    image: postgres:17-alpine       # major upgrades are manual (dump/restore); keep backup/Dockerfile in step
     environment:
       POSTGRES_DB: smsledger
       POSTGRES_USER: smsledger
@@ -33,7 +33,6 @@ services:
     build:
       context: ..
       args:
-        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.13-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     image: smsledger:latest
     env_file: .env
@@ -50,7 +49,7 @@ services:
 
   caddy:
     <<: *base
-    image: ${CADDY_IMAGE:-caddy:2.10-alpine}
+    image: caddy:2.10-alpine
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
@@ -68,9 +67,6 @@ services:
     profiles: [backup]
     build:
       context: ./backup
-      args:
-        POSTGRES_IMAGE: ${POSTGRES_IMAGE:-postgres:17-alpine}
-        RESTIC_IMAGE: ${RESTIC_IMAGE:-restic/restic:0.18.1}
     image: smsledger-backup:latest
     env_file: backup.env           # backup credentials never enter the app container
     environment:

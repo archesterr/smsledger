@@ -1,10 +1,8 @@
-# pg_dump comes from the same Postgres image as the db service (matching major version);
 # restic is copied from its official, version-pinned image (no package repos needed at build).
-ARG POSTGRES_IMAGE=postgres:17-alpine
-ARG RESTIC_IMAGE=restic/restic:0.18.1
-FROM ${RESTIC_IMAGE} AS restic
+FROM restic/restic:0.18.1 AS restic
 
-FROM ${POSTGRES_IMAGE}
+# pg_dump must be the same Postgres major as the db service in docker-compose.yml
+FROM postgres:17-alpine
 COPY --from=restic /usr/bin/restic /usr/local/bin/restic
 COPY backup.sh /usr/local/bin/backup
 ENV RESTIC_CACHE_DIR=/tmp/restic-cache HOME=/tmp
