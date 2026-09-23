@@ -1,0 +1,28 @@
+[project]
+name = "smsledger"
+version = "2.0.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["ledger/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "DJ"]
+ignore = [
+    "S101",   # assert in tests
+    "S105",   # "hardcoded password" false positives on token prefixes / test fixtures
+    "S106",
+    "S308",   # mark_safe: only used on our own generated SVG
+]
+
+[tool.ruff.lint.per-file-ignores]
+"ledger/tests/*" = ["S"]
+
+[tool.ruff.lint.isort]
+split-on-trailing-comma = false
+
+[tool.coverage.run]
+source = ["ledger"]
+omit = ["ledger/migrations/*", "ledger/tests/*"]

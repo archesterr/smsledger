@@ -1,0 +1,58 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}جزئیات تراکنش{% endblock %}
+{% block heading %}جزئیات تراکنش{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="row between">
+    <div class="kpi-like">
+      <div class="small muted">{% if t.direction == 'IN' %}دریافت{% else %}پرداخت{% endif %} · {{ t.get_source_display }}</div>
+      <div class="value"><span class="num{% if t.direction == 'IN' %} good{% endif %}">{{ t|signed:unit }}</span> <span class="small muted">{{ unit|unit_label }}</span></div>
+    </div>
+    <span class="ico-big" aria-hidden="true">{{ t.category.icon|default:"🧾" }}</span>
+  </div>
+  <hr>
+  <dl class="kv">
+    <dt>زمان</dt><dd>{{ t.occurred_at|jday }} · {{ t.occurred_at|jtime }}</dd>
+    <dt>حساب</dt><dd>{{ t.account.name }}</dd>
+    {% if t.balance is not None %}<dt>مانده بعد از آن</dt><dd><span class="num">{{ t.balance|amount:unit }}</span></dd>{% endif %}
+    {% if t.title %}<dt>عنوان بانک</dt><dd>{{ t.title }}</dd>{% endif %}
+    {% if t.counterparty %}<dt>طرف حساب</dt><dd>{{ t.counterparty }}</dd>{% endif %}
+    {% if t.category_by == 'rule' %}<dt>دسته</dt><dd>خودکار، با <a href="{% url 'rules' %}">قانون</a></dd>{% elif t.category_by == 'auto' %}<dt>دسته</dt><dd>خودکار (از متن پیامک)</dd>{% endif %}
+  </dl>
+  {% if t.gap_amount is not None %}
+  <div class="alert warning"><span class="ico">⚠️</span><div>
+    <b>قبل از این تراکنش، پیامکی جا افتاده</b><br>
+    <span class="small">موجودی با تراکنش قبلی جور نیست. جمع تراکنش‌های ثبت‌نشده حدود
+      <span class="num">{{ t.gap_amount|absval|amount:unit }}</span> {{ unit|unit_label }}
+      ({% if t.gap_amount > 0 %}دریافت{% else %}پرداخت{% endif %}) است.
+      پیامکش را از <a href="{% url 'import' %}">وارد کردن پیامک</a> اضافه کنید، یا اگر نقدی/بدون پیامک بوده، دستی ثبتش کنید.</span>
+  </div></div>
+  {% endif %}
+  {% if t.message %}
+  <details class="table-view"><summary>متن پیامک</summary><pre class="card">{{ t.message.raw }}</pre></details>
+  {% endif %}
+</div>
+
+<h2>ویرایش</h2>
+<form method="post" class="card" novalidate>{% csrf_token %}
+  {% include "ledger/_errors.html" %}
+  {% if manual %}
+    {% include "ledger/_field.html" with f=form.direction %}
+    <div class="form-grid">
+      {% include "ledger/_field.html" with f=form.amount %}
+      {% include "ledger/_field.html" with f=form.account %}
+      {% include "ledger/_field.html" with f=form.date %}
+      {% include "ledger/_field.html" with f=form.time %}
+    </div>
+  {% endif %}
+  {% include "ledger/_field.html" with f=form.category %}
+  {% include "ledger/_field.html" with f=form.note %}
+  {% if not manual %}{% include "ledger/_field.html" with f=form.make_rule %}{% endif %}
+  <div class="actions"><button class="btn" type="submit">ذخیره</button></div>
+</form>
+
+<form method="post" action="{% url 'tx_delete' t.pk %}" class="actions" data-confirm="این تراکنش حذف شود؟">{% csrf_token %}
+  <button class="btn ghost" type="submit">🗑 حذف تراکنش</button>
+</form>
+{% if not manual %}<p class="muted small">اگر این پیامک اشتباه ثبت شده (مثلاً تبلیغ بوده)، حذفش کنید؛ ارسال دوباره همان پیامک هم دیگر ثبت نمی‌شود.</p>{% endif %}
+{% endblock %}

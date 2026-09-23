@@ -1,0 +1,19 @@
+{% extends "ledger/base.html" %}
+{% block title %}ثبت دستی{% endblock %}
+{% block heading %}ثبت دستی{% endblock %}
+{% block content %}
+<p class="muted small">برای خرج‌های نقدی، یا تراکنشی که پیامکش نرسیده. اگر پیامک را دارید، بهتر است از بخش «وارد کردن پیامک» اضافه‌اش کنید تا موجودی هم ثبت شود.</p>
+<form method="post" class="card" novalidate>{% csrf_token %}
+  {% include "ledger/_errors.html" %}
+  {% include "ledger/_field.html" with f=form.direction %}
+  <div class="form-grid">
+    {% include "ledger/_field.html" with f=form.amount %}
+    {% include "ledger/_field.html" with f=form.account %}
+    {% include "ledger/_field.html" with f=form.date %}
+    {% include "ledger/_field.html" with f=form.time %}
+    {% include "ledger/_field.html" with f=form.category full=True %}
+    {% include "ledger/_field.html" with f=form.note full=True %}
+  </div>
+  <div class="actions"><button class="btn" type="submit">ثبت</button><a class="btn secondary" href="{% url 'tx_list' %}">انصراف</a></div>
+</form>
+{% endblock %}

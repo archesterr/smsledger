@@ -1,0 +1,13 @@
+{% extends "ledger/base.html" %}
+{% block title %}ارسال نمونه{% endblock %}
+{% block heading %}ارسال نمونه برای مدیر{% endblock %}
+{% block content %}
+<div class="alert warning"><span class="ico">⚠️</span><div>
+  فقط همین متنی که پایین می‌بینید برای مدیر فرستاده می‌شود. <b>اسم، شماره حساب/کارت و هر اطلاعات شخصی</b> را پاک کنید یا با * عوض کنید.
+  عددها (مبلغ و موجودی) را می‌توانید عوض کنید، ولی شکل و ترتیب خط‌ها را نگه دارید.
+</div></div>
+<form method="post" class="card" novalidate>{% csrf_token %}
+  {% include "ledger/_field.html" with f=form.text %}
+  <div class="actions"><button class="btn" type="submit">ارسال</button><a class="btn secondary" href="{% url 'messages' %}">انصراف</a></div>
+</form>
+{% endblock %}

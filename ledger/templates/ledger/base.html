@@ -1,0 +1,53 @@
+{% load static ledger %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="{{ site_name }}">
+<meta name="format-detection" content="telephone=no">
+<meta name="referrer" content="same-origin">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="{% static 'ledger/icons/icon.svg' %}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{% static 'ledger/icons/apple-touch-icon.png' %}">
+<link rel="preload" href="{% static 'ledger/fonts/Vazirmatn-wght.woff2' %}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{% static 'ledger/app.css' %}">
+<script src="{% static 'ledger/app.js' %}" defer></script>
+<title>{% block title %}{% endblock %} · {{ site_name }}</title>
+</head>
+<body class="{% if not user.is_authenticated %}anon{% endif %}">
+{% if user.is_authenticated %}
+<header class="top"><div class="top-in">
+  <a class="brand" href="/">{{ site_name }}</a>
+  <span class="title grow">{% block heading %}{% endblock %}</span>
+  {% block top_action %}{% endblock %}
+</div></header>
+{% endif %}
+<main>
+{% if messages %}<div class="flash">{% for m in messages %}
+  <div class="alert {% if m.level_tag == 'error' %}critical{% elif m.level_tag == 'warning' %}warning{% else %}info{% endif %}" role="status">
+    <span class="ico">{% if m.level_tag == 'error' %}⛔{% elif m.level_tag == 'warning' %}⚠️{% else %}✓{% endif %}</span><div>{{ m }}</div>
+  </div>{% endfor %}</div>{% endif %}
+{% block content %}{% endblock %}
+</main>
+{% if user.is_authenticated %}
+<nav class="tabs" aria-label="منوی اصلی">
+  <a href="/" class="{% if nav == 'home' %}on{% endif %}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>خانه</a>
+  <a href="/inbox/" class="{% if nav == 'inbox' %}on{% endif %}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/></svg>
+    دسته‌بندی{% if inbox_count %}<b class="badge num" data-inbox-count>{{ inbox_count|fa }}</b>{% endif %}</a>
+  <a href="/tx/" class="{% if nav == 'tx' %}on{% endif %}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>تراکنش‌ها</a>
+  <a href="/reports/" class="{% if nav == 'reports' %}on{% endif %}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M7 16v-5M12 16V7M17 16v-8"/></svg>گزارش</a>
+  <a href="/more/" class="{% if nav == 'more' %}on{% endif %}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>بیشتر</a>
+</nav>
+{% endif %}
+</body>
+</html>

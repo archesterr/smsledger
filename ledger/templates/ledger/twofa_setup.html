@@ -1,0 +1,20 @@
+{% extends "ledger/base.html" %}
+{% block title %}ورود دو مرحله‌ای{% endblock %}
+{% block heading %}روشن کردن ورود دو مرحله‌ای{% endblock %}
+{% block content %}
+<ol class="steps">
+  <li><b>روی همین آیفون:</b> <a href="{{ uri }}">این لینک</a> را بزنید تا در Passwords (یا برنامه احراز هویت) ذخیره شود.
+    <br><b>روی دستگاه دیگر:</b> این کد QR را با Google Authenticator یا هر برنامه مشابه اسکن کنید.
+    <div class="qr" aria-label="QR">{{ qr|safe }}</div>
+    <div class="small muted">یا کلید را دستی وارد کنید:</div>
+    <code class="token" id="secret">{{ grouped }}</code>
+    <button class="btn secondary small" type="button" data-copy="secret">کپی کلید</button>
+  </li>
+  <li>کد ۶ رقمی که برنامه نشان می‌دهد را وارد کنید:
+    <form method="post" class="card" novalidate>{% csrf_token %}
+      {% include "ledger/_field.html" with f=form.code %}
+      <button class="btn" type="submit">تأیید و روشن کردن</button>
+    </form>
+  </li>
+</ol>
+{% endblock %}

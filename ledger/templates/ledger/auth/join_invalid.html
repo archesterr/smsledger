@@ -1,0 +1,18 @@
+{% extends "ledger/base.html" %}
+{% block title %}لینک دعوت{% endblock %}
+{% block content %}
+<div class="auth">
+  <div class="brand-big">{{ site_name }}</div>
+  <div class="card center">
+    {% if reason == "rate" %}
+      <p>تلاش‌ها زیاد بود. یک ساعت دیگر دوباره امتحان کنید.</p>
+    {% elif reason == "logged_in" %}
+      <p>شما الان وارد حساب دیگری هستید. برای ساخت حساب جدید، اول خارج شوید.</p>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn secondary">خروج</button></form>
+    {% else %}
+      <p>این لینک دعوت معتبر نیست، منقضی شده یا قبلاً استفاده شده است.</p>
+      <p class="muted small">از کسی که دعوتتان کرده یک لینک تازه بخواهید.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

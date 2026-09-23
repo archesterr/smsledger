@@ -1,0 +1,22 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}دسته{% endblock %}
+{% block heading %}{% if c.pk %}ویرایش دسته{% else %}دسته جدید{% endif %}{% endblock %}
+{% block content %}
+<form method="post" class="card" novalidate>{% csrf_token %}
+  {% include "ledger/_errors.html" %}
+  <div class="row">
+    {% include "ledger/_field.html" with f=form.icon %}
+    <div class="grow">{% include "ledger/_field.html" with f=form.name %}</div>
+  </div>
+  {% include "ledger/_field.html" with f=form.kind %}
+  {% include "ledger/_field.html" with f=form.archived %}
+  <div class="actions"><button class="btn" type="submit">ذخیره</button><a class="btn secondary" href="{% url 'categories' %}">انصراف</a></div>
+</form>
+{% if c.pk %}
+<form method="post" action="{% url 'category_delete' c.pk %}" class="actions"
+      data-confirm="دسته حذف شود؟ {{ used|fa }} تراکنش بدون دسته می‌شوند و قانون‌ها و بودجه این دسته هم حذف می‌شوند.">{% csrf_token %}
+  <button class="btn ghost" type="submit">🗑 حذف دسته</button>
+</form>
+<p class="muted small">{{ used|fa }} تراکنش این دسته را دارند. اگر فقط نمی‌خواهید در لیست‌ها باشد، بایگانی‌اش کنید.</p>
+{% endif %}
+{% endblock %}

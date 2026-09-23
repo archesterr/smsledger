@@ -1,0 +1,18 @@
+{% extends "ledger/base.html" %}
+{% block title %}حساب{% endblock %}
+{% block heading %}{% if a.pk %}ویرایش حساب{% else %}حساب جدید{% endif %}{% endblock %}
+{% block content %}
+<form method="post" class="card" novalidate>{% csrf_token %}
+  {% include "ledger/_errors.html" %}
+  {% include "ledger/_field.html" with f=form.name %}
+  {% if form.kind %}{% include "ledger/_field.html" with f=form.kind %}{% endif %}
+  {% include "ledger/_field.html" with f=form.archived %}
+  <div class="actions"><button class="btn" type="submit">ذخیره</button><a class="btn secondary" href="{% url 'accounts' %}">انصراف</a></div>
+</form>
+{% if a.pk %}
+<form method="post" action="{% url 'account_delete' a.pk %}" class="actions" data-confirm="حساب حذف شود؟">{% csrf_token %}
+  <button class="btn ghost" type="submit">🗑 حذف حساب</button>
+</form>
+<p class="muted small">حسابی که تراکنش دارد حذف نمی‌شود؛ بایگانی‌اش کنید تا در فرم‌ها دیده نشود.</p>
+{% endif %}
+{% endblock %}

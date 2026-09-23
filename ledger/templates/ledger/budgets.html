@@ -1,0 +1,24 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}بودجه{% endblock %}
+{% block heading %}بودجه ماهانه{% endblock %}
+{% block content %}
+<p class="muted small">برای هر دسته‌ای که می‌خواهید، سقف خرج ماهانه را به {{ unit|unit_label }} بنویسید. خالی یعنی بدون بودجه.
+  وضعیت، مربوط به {% month_title jy jm %} است.</p>
+<form method="post" class="card" novalidate>{% csrf_token %}
+  {% for r in rows %}
+  <div class="budget-row">
+    <div class="row">
+      <label class="grow" for="b{{ r.c.pk }}">{{ r.c.icon }} {{ r.c.name }}</label>
+      <input class="num-input" id="b{{ r.c.pk }}" name="b{{ r.c.pk }}" value="{{ r.value }}" inputmode="decimal" autocomplete="off" placeholder="—">
+    </div>
+    {% if r.error %}<ul class="errorlist"><li>مبلغ معتبر نیست.</li></ul>{% endif %}
+    {% if r.status %}{% with b=r.status %}
+      <div class="meter{% if b.over %} critical{% elif b.pct >= 80 %} warning{% endif %}"><span class="w-{{ b.pct }}"></span></div>
+      <div class="state">{% if b.over %}⛔ بیش از بودجه{% elif b.pct >= 80 %}⚠️ نزدیک سقف{% else %}تا اینجا{% endif %}:
+        <span class="num">{{ b.spent|amount:unit }}</span> خرج شده</div>
+    {% endwith %}{% endif %}
+  </div>
+  {% endfor %}
+  <div class="actions"><button class="btn" type="submit">ذخیره بودجه‌ها</button></div>
+</form>
+{% endblock %}

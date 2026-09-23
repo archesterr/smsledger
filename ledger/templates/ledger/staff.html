@@ -1,0 +1,54 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}مدیریت{% endblock %}
+{% block heading %}مدیریت{% endblock %}
+{% block content %}
+<p class="muted small">این صفحه فقط وضعیت فنی را نشان می‌دهد و هیچ مبلغ، موجودی یا پیامکی از کاربران در آن نیست (به جز نمونه‌هایی که خودشان فرستاده‌اند).</p>
+
+<h2>دعوت دوستان</h2>
+{% if new_link %}
+<div class="card">
+  <p><b>لینک دعوت (فقط همین یک بار نمایش داده می‌شود):</b></p>
+  <code class="token" id="invite">{{ new_link }}</code>
+  <button class="btn secondary small" type="button" data-copy="invite">کپی</button>
+  <p class="muted small">یک بار مصرف است و تا چند روز اعتبار دارد. در پیام‌رسانی امن بفرستید.</p>
+</div>
+{% endif %}
+<form method="post" action="{% url 'invite_create' %}" class="card row wrap" novalidate>{% csrf_token %}
+  <div class="grow"><label for="note">برای چه کسی؟ (یادداشت)</label><input id="note" name="note" maxlength="100" placeholder="مثلاً علی"></div>
+  <button class="btn" type="submit">ساخت لینک دعوت</button>
+</form>
+{% if invites %}
+<div class="card table-wrap"><table>
+  <thead><tr><th>یادداشت</th><th>ساخته شده</th><th>وضعیت</th><th></th></tr></thead>
+  <tbody>{% for i in invites %}<tr>
+    <td>{{ i.note|default:"—" }}</td><td>{{ i.created_at|jdate }}</td>
+    <td>{% if i.used_by %}استفاده شد: {{ i.used_by.username }}{% elif i.is_usable %}فعال تا {{ i.expires_at|jdate }}{% else %}منقضی{% endif %}</td>
+    <td>{% if i.is_usable %}<form method="post" action="{% url 'invite_revoke' i.pk %}">{% csrf_token %}<button class="btn ghost small">باطل</button></form>{% endif %}</td>
+  </tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+
+<h2>کاربران</h2>
+<div class="card table-wrap"><table>
+  <thead><tr><th>کاربر</th><th>عضویت</th><th>دستگاه</th><th>آخرین پیامک</th><th class="n">خوانده‌نشده</th><th></th></tr></thead>
+  <tbody>{% for r in rows %}<tr>
+    <td>{{ r.u.username }}{% if r.u.is_staff %} <span class="pill">مدیر</span>{% endif %}{% if not r.u.is_active %} <span class="pill warn">غیرفعال</span>{% endif %}{% if r.u.has_2fa %} 🔐{% endif %}</td>
+    <td>{{ r.u.date_joined|jdate }}</td>
+    <td>{{ r.u.n_devices|fa }}</td>
+    <td>{{ r.u.last_seen|ago }}{% if r.silent %} <span class="flag">⚠️ ساکت</span>{% endif %}</td>
+    <td class="n">{{ r.unparsed|fa }}</td>
+    <td>{% if r.u.pk != user.pk %}<form method="post" action="{% url 'user_toggle' r.u.pk %}" data-confirm="وضعیت این کاربر عوض شود؟">{% csrf_token %}
+      <button class="btn ghost small">{% if r.u.is_active %}غیرفعال{% else %}فعال{% endif %}</button></form>{% endif %}</td>
+  </tr>{% endfor %}</tbody>
+</table></div>
+
+<h2>نمونه پیامک‌های ارسالی ({{ samples|length|fa }})</h2>
+<p class="muted small">برای اضافه کردن قالب بانک جدید. بعد از اضافه شدن قالب و استقرار نسخه جدید، پیامک‌های خوانده‌نشده همه کاربران خودکار دوباره بررسی می‌شوند.</p>
+{% for s in samples %}
+<div class="card">
+  <div class="row between small muted"><span>{{ s.user.username }} · {{ s.created_at|jdatetime }}</span>
+    <form method="post" action="{% url 'sample_resolve' s.pk %}">{% csrf_token %}<button class="btn ghost small">انجام شد</button></form></div>
+  <pre>{{ s.text }}</pre>
+</div>
+{% empty %}<div class="card empty">نمونه‌ای نیست.</div>{% endfor %}
+{% endblock %}

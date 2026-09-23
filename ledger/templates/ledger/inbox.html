@@ -1,0 +1,34 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}دسته‌بندی{% endblock %}
+{% block heading %}<span data-inbox-count>{{ total|fa }}</span> تراکنش بدون دسته{% endblock %}
+{% block content %}
+{% if items %}
+<p class="muted small">برای هر تراکنش، دسته درست را لمس کنید. پیشنهادها بر اساس انتخاب‌های قبلی شماست.
+  برای تراکنش‌های تکراری <a href="{% url 'rules' %}">قانون</a> بسازید تا خودکار دسته بگیرند.</p>
+{% for it in items %}{% with t=it.tx %}
+<div class="card inbox-card">
+  <div class="head">
+    <div>
+      <div class="amt"><span class="num{% if t.direction == 'IN' %} good{% endif %}">{{ t|signed:unit }}</span> <span class="small muted">{{ unit|unit_label }}</span></div>
+      <div class="small muted">{{ t.occurred_at|jday }} · {{ t.occurred_at|jtime }} · {{ t.account.name }}</div>
+      {% if t.title or t.counterparty %}<div class="small">{{ t.title }}{% if t.counterparty %} · {{ t.counterparty }}{% endif %}</div>{% endif %}
+    </div>
+    <a class="btn ghost small" href="{% url 'tx_detail' t.pk %}">جزئیات</a>
+  </div>
+  <form class="js-cat" method="post" action="{% url 'tx_set_category' t.pk %}">{% csrf_token %}
+    <input type="hidden" name="back" value="{% url 'inbox' %}">
+    <div class="chips">
+      {% for c in it.suggested %}<button class="chip sug" name="category" value="{{ c.pk }}">{{ c.icon }} {{ c.name }}</button>{% endfor %}
+      {% if not it.suggested %}{% for c in it.others|slice:":6" %}<button class="chip" name="category" value="{{ c.pk }}">{{ c.icon }} {{ c.name }}</button>{% endfor %}{% endif %}
+    </div>
+    <details class="more-cats"><summary>دسته‌های دیگر</summary>
+      <div class="chips">{% for c in it.others %}{% if it.suggested or forloop.counter > 6 %}<button class="chip" name="category" value="{{ c.pk }}">{{ c.icon }} {{ c.name }}</button>{% endif %}{% endfor %}</div>
+    </details>
+  </form>
+</div>
+{% endwith %}{% endfor %}
+{% if total > items|length %}<p class="center muted small">{{ items|length|fa }} مورد از {{ total|fa }} نمایش داده شد؛ بعد از دسته‌بندی، بقیه می‌آیند.</p>{% endif %}
+{% else %}
+<div class="card empty"><span class="big">🎉</span>همه تراکنش‌ها دسته دارند.</div>
+{% endif %}
+{% endblock %}

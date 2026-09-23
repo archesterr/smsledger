@@ -1,0 +1,20 @@
+{% extends "ledger/base.html" %}
+{% block title %}بیشتر{% endblock %}
+{% block content %}
+<div class="card flush"><ul class="menu">
+  <li><a href="{% url 'budgets' %}"><span class="ico">🎯</span>بودجه ماهانه<span class="chev">‹</span></a></li>
+  <li><a href="{% url 'categories' %}"><span class="ico">🗂️</span>دسته‌ها<span class="chev">‹</span></a></li>
+  <li><a href="{% url 'rules' %}"><span class="ico">⚙️</span>قانون‌های دسته‌بندی خودکار<span class="chev">‹</span></a></li>
+  <li><a href="{% url 'accounts' %}"><span class="ico">🏦</span>حساب‌ها<span class="chev">‹</span></a></li>
+</ul></div>
+<div class="card flush"><ul class="menu">
+  <li><a href="{% url 'import' %}"><span class="ico">📋</span>وارد کردن پیامک (دستی)<span class="chev">‹</span></a></li>
+  <li><a href="{% url 'messages' %}"><span class="ico">❓</span>پیامک‌های خوانده‌نشده<span class="chev">‹</span></a></li>
+  <li><a href="{% url 'setup' %}"><span class="ico">📱</span>راه‌اندازی آیفون و دستگاه‌ها<span class="chev">‹</span></a></li>
+  <li><a href="{% url 'settings' %}"><span class="ico">🔐</span>تنظیمات و امنیت<span class="chev">‹</span></a></li>
+  {% if user.is_staff %}<li><a href="{% url 'staff' %}"><span class="ico">🛠️</span>مدیریت (دعوت‌ها و کاربران)<span class="chev">‹</span></a></li>{% endif %}
+</ul></div>
+<form method="post" action="{% url 'logout' %}" class="actions">{% csrf_token %}
+  <button class="btn secondary block" type="submit">خروج از حساب «{{ user.username }}»</button>
+</form>
+{% endblock %}

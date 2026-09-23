@@ -1,0 +1,13 @@
+{% extends "ledger/base.html" %}
+{% block title %}کدهای بازیابی{% endblock %}
+{% block heading %}کدهای بازیابی{% endblock %}
+{% block content %}
+<div class="alert info"><span class="ico">✅</span><div>ورود دو مرحله‌ای روشن شد.</div></div>
+<div class="card">
+  <p><b>این کدها را جایی امن ذخیره کنید</b> (مثلاً در Notes قفل‌دار یا روی کاغذ). اگر گوشی گم شد، هر کد یک بار به جای کد ۶ رقمی کار می‌کند.
+    این صفحه دیگر نمایش داده نمی‌شود.</p>
+  <div class="codes" id="codes">{% for c in codes %}<div>{{ c }}</div>{% endfor %}</div>
+  <button class="btn secondary small" type="button" data-copy="codes">کپی همه</button>
+</div>
+<div class="actions"><a class="btn" href="{% url 'home' %}">ذخیره کردم</a></div>
+{% endblock %}

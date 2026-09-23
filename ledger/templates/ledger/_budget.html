@@ -1,0 +1,12 @@
+{% load ledger %}<div class="budget-row">
+  <div class="lab">
+    <span>{{ b.category.icon }} {{ b.category.name }}</span>
+    <span class="nowrap"><span class="num">{{ b.spent|amount:unit }}</span> <span class="muted">از <span class="num">{{ b.budget|amount:unit }}</span></span></span>
+  </div>
+  <div class="meter{% if b.over %} critical{% elif b.pct >= 80 %} warning{% endif %}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ b.pct }}" aria-label="{{ b.category.name }}"><span class="w-{{ b.pct }}"></span></div>
+  <div class="state">
+    {% if b.over %}⛔ بیش از بودجه: <span class="num">{{ b.left|amount:unit }}</span>
+    {% elif b.pct >= 80 %}⚠️ نزدیک سقف · مانده <span class="num">{{ b.left|amount:unit }}</span>
+    {% else %}مانده <span class="num">{{ b.left|amount:unit }}</span>{% endif %}
+  </div>
+</div>

@@ -1,0 +1,20 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}پیامک‌های خوانده‌نشده{% endblock %}
+{% block heading %}پیامک‌های خوانده‌نشده ({{ total|fa }}){% endblock %}
+{% block content %}
+<p class="muted small">این پیامک‌ها ذخیره شده‌اند ولی قالبشان هنوز شناخته نشده. وقتی قالب بانک اضافه شود، خودکار تبدیل به تراکنش می‌شوند.
+  برای کمک، نمونه را (بعد از پاک کردن اطلاعات شخصی) برای مدیر بفرستید.</p>
+{% for m in items %}
+<div class="card">
+  <div class="row between small muted"><span>{{ m.received_at|jdatetime }}</span><span class="mono">{{ m.error }}</span></div>
+  <pre>{{ m.raw }}</pre>
+  <div class="actions">
+    <a class="btn secondary small" href="{% url 'message_share' m.pk %}">ارسال برای مدیر</a>
+    <form method="post" action="{% url 'message_delete' m.pk %}" class="inline" data-confirm="این پیامک حذف شود؟">{% csrf_token %}
+      <button class="btn ghost small" type="submit">حذف</button></form>
+  </div>
+</div>
+{% empty %}
+<div class="card empty"><span class="big">✅</span>همه پیامک‌ها خوانده شده‌اند.</div>
+{% endfor %}
+{% endblock %}

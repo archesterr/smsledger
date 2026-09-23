@@ -1,0 +1,5 @@
+{% load ledger %}<div class="month-nav">
+  <a href="?m={{ prev }}" aria-label="ماه قبل">›</a>
+  <span class="cur">{% month_title jy jm %}</span>
+  {% if next %}<a href="?m={{ next }}" aria-label="ماه بعد">‹</a>{% else %}<span class="off" aria-hidden="true">‹</span>{% endif %}
+</div>
