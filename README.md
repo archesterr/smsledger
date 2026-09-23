@@ -133,6 +133,11 @@ Everything is explained in Persian inside the app, with the user's own server UR
 4. **Automation**: Message → sender = bank contact(s), contains the bank's balance word →
    Run Shortcut (iOS 17+: *Run Immediately*, *Notify When Run* off). One automation per word:
    `موجودی` for Blu, `مانده` for Saman, Middle East Bank, Pasargad and Melli.
+   **iOS 16** has no *New Blank Automation* / *Run Immediately*: Automation → **Create Personal
+   Automation** → Message → *Message Contains* / *Sender* → Next → **Add Action** → Run Shortcut
+   (expand it to set *Input* = Shortcut Input) → Next → turn off *Ask Before Running* → Done.
+   Each SMS then shows a notification to tap. The setup page opens the guide for the
+   phone's iOS version (from Safari's User-Agent).
 5. **Shortcut "Sync SMS Queue"** + a daily 03:00 automation: posts `queue.txt` to
    `/ingest?split=1&source=queue` and deletes the file only if the response has a `status` key
    (errors never contain one, so a failed sync keeps the queue).

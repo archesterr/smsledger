@@ -226,6 +226,19 @@ class TestPages(BaseTest):
         self.client.logout()
         self.assertEqual(self.post_sms(token, {"sms": blu(9, balance=9)}).json()["status"], "created")
 
+    def test_setup_opens_the_guide_for_the_phones_ios(self):
+        ua16 = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_7_16 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
+        ua17 = ua16.replace("16_7_16", "17_5")
+        page16 = self.client.get("/setup/", HTTP_USER_AGENT=ua16).content.decode()
+        page17 = self.client.get("/setup/", HTTP_USER_AGENT=ua17).content.decode()
+        desktop = self.client.get("/setup/", HTTP_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64)").content.decode()
+        self.assertIn('<details class="guide" open><summary>iOS ۱۶', page16)
+        self.assertNotIn('<details class="guide" open><summary>iOS ۱۷', page16)
+        self.assertIn('<details class="guide" open><summary>iOS ۱۷', page17)
+        self.assertNotIn('<details class="guide" open><summary>iOS ۱۶', page17)
+        self.assertIn('<details class="guide" open><summary>iOS ۱۷', desktop)
+        self.assertIn("Create Personal Automation", desktop)  # both guides are always on the page
+
     def test_password_change_keeps_session(self):
         r = self.client.post("/settings/", {"form": "password", "old_password": PASSWORD,
                                             "new_password1": "another-long-passphrase-7",

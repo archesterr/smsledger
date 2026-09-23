@@ -52,6 +52,7 @@
   <details class="table-view"><summary>یا دستی بسازید</summary>
 {% endif %}
   <p class="muted small">برنامه <b>Shortcuts</b> ← زبانه Shortcuts ← دکمه <b>+</b> ← اسم: <b>SMS to Ledger</b>. این کارها را به ترتیب اضافه کنید:</p>
+  <p class="muted small">تنظیماتی مثل Method، Headers، Case Sensitive و Make New Line زیر <b>Show More</b> یا فلش <b>(›)</b> کنار هر کار پنهان است؛ اول آن را بزنید.</p>
   <ol class="steps">
     <li><b>Match Text</b> — متن: <i>Shortcut Input</i> · الگو (Pattern):
       <code class="token" id="otp-pattern">رمز(?!\s*ارز)|یک.?بار|کد.?(تایید|تأیید|ورود|فعال|پویا)|OTP</code>
@@ -74,25 +75,45 @@
 
 <h2>۴. اتوماسیون (برای هر پیامک)</h2>
 <div class="card">
+  <p>دو اتوماسیون لازم است، هر کدام با یک کلمه (کلمه موجودی حساب در پیامک آن بانک؛ پیامک‌های تبلیغاتی بانک را کنار می‌گذارد):</p>
+  <ul>
+    <li>بلو: <b>«موجودی»</b></li>
+    <li>سامان، خاورمیانه، پاسارگاد، ملی (همه با هم در یک اتوماسیون): <b>«مانده»</b></li>
+  </ul>
+  <p class="muted small">مراحل در iOS ۱۶ و ۱۷ فرق دارد. نسخه گوشی: Settings ← General ← About ← iOS Version.
+  {% if ios %}این صفحه روی گوشی با <b>iOS {{ ios|fa }}</b> باز شده؛ راهنمای همان نسخه باز است.{% endif %}</p>
+
+  <details class="guide"{% if not ios or ios >= 17 %} open{% endif %}><summary>iOS ۱۷ و بالاتر</summary>
   <ol class="steps">
     <li>Shortcuts ← زبانه <b>Automation</b> ← <b>+</b> ← <b>Message</b>.</li>
-    <li><b>Sender</b>: مخاطب بانک (می‌شود چند بانک را با هم انتخاب کرد) · <b>Message Contains</b>: کلمه موجودی حساب در پیامک آن بانک:
-      <ul>
-        <li>بلو: <code>موجودی</code></li>
-        <li>سامان، خاورمیانه، پاسارگاد، ملی: <code>مانده</code></li>
-      </ul>
-      <div class="small muted">برای هر کلمه یک اتوماسیون جدا بسازید (یکی برای بلو، یکی برای بقیه). این کلمه پیامک‌های تبلیغاتی بانک را کنار می‌گذارد.</div></li>
-    <li><b>iOS ۱۷ و بالاتر:</b> <b>Run Immediately</b> را انتخاب و <b>Notify When Run</b> را خاموش کنید.</li>
-    <li><b>New Blank Automation</b> ← کار <b>Run Shortcut</b> ← «SMS to Ledger» ← روی فلش بزنید و <b>Input</b> را <i>Shortcut Input</i> بگذارید.</li>
-    <li>آزمایش: در Shortcuts میان‌بر «SMS to Ledger» را یک بار دستی اجرا کنید، بعد <a href="{% url 'setup' %}">این صفحه را تازه کنید</a>.</li>
+    <li><b>Sender</b>: مخاطب بانک (چند بانک را می‌شود با هم انتخاب کرد) · <b>Message Contains</b>: کلمه بالا.</li>
+    <li><b>Run Immediately</b> را انتخاب و <b>Notify When Run</b> را خاموش کنید ← <b>Next</b>.</li>
+    <li><b>New Blank Automation</b> ← کار <b>Run Shortcut</b> ← «SMS to Ledger» ← روی فلش بزنید و <b>Input</b> را <i>Shortcut Input</i> بگذارید ← <b>Done</b>.</li>
   </ol>
-  <div class="table-wrap"><table>
-    <thead><tr><th>نسخه iOS</th><th>با هر پیامک</th></tr></thead>
-    <tbody>
-      <tr><td>۱۷ و بالاتر</td><td>کاملاً خودکار و بی‌صدا</td></tr>
-      <tr><td>۱۴ تا ۱۶</td><td>یک اعلان می‌آید؛ <b>لمسش کنید</b> تا اجرا شود. این محدودیت خود اپل است و هیچ برنامه‌ای نمی‌تواند دورش بزند.</td></tr>
-    </tbody>
-  </table></div>
+  <p class="muted small">نتیجه: با هر پیامک، کاملاً خودکار و بی‌صدا.</p>
+  </details>
+
+  <details class="guide"{% if ios and ios < 17 %} open{% endif %}><summary>iOS ۱۶ (و ۱۴، ۱۵)</summary>
+  <p class="muted small">در iOS ۱۶ دکمه «New Blank Automation» و گزینه «Run Immediately» وجود ندارد؛ این مراحل را بروید:</p>
+  <ol class="steps">
+    <li>Shortcuts ← زبانه <b>Automation</b> (پایین صفحه) ← <b>Create Personal Automation</b>.
+      <div class="small muted">اگر قبلاً اتوماسیون ساخته‌اید، اول دکمه <b>+</b> بالای صفحه.</div></li>
+    <li>لیست را پایین بروید ← <b>Message</b>.</li>
+    <li><b>Message Contains</b> ← <b>Choose</b> ← کلمه بالا را بنویسید ← Done.<br>
+      <b>Sender</b> ← <b>Choose</b> ← مخاطب بانک‌ها را انتخاب کنید ← Done.<br>
+      بالا سمت راست: <b>Next</b>.</li>
+    <li><b>Add Action</b> ← در جستجو بنویسید <b>Run Shortcut</b> ← انتخابش کنید.</li>
+    <li>در کار Run Shortcut روی کلمه کم‌رنگ <b>Shortcut</b> بزنید ← «SMS to Ledger».
+      بعد روی فلش <b>(›)</b> کنار کار بزنید تا <b>Input</b> دیده شود ← <b>Input</b> ← <i>Shortcut Input</i>.</li>
+    <li>بالا سمت راست: <b>Next</b> ← اگر <b>Ask Before Running</b> هست، خاموشش کنید و در پیام بعد <b>Don't Ask</b> را بزنید ← <b>Done</b>.</li>
+    <li>برای کلمه دوم (<b>«مانده»</b>) همین مراحل را دوباره بروید.</li>
+  </ol>
+  <div class="alert warning"><span class="ico">👆</span><div>در iOS ۱۶ با هر پیامک بانک یک اعلان از Shortcuts می‌آید؛ <b>لمسش کنید</b> تا اجرا شود.
+    این محدودیت خود اپل برای اتوماسیون پیامک است (در iOS ۱۷ برداشته شد) و هیچ برنامه‌ای نمی‌تواند دورش بزند.</div></div>
+  <p class="muted small">اسم دکمه‌ها ممکن است بین نسخه‌های فرعی کمی فرق کند؛ اگر چیزی را پیدا نکردید، دنبال همان کلمه در صفحه بگردید.</p>
+  </details>
+
+  <p class="muted small">آزمایش: در Shortcuts میان‌بر «SMS to Ledger» را یک بار دستی اجرا کنید، بعد <a href="{% url 'setup' %}">این صفحه را تازه کنید</a>.</p>
   <p class="muted small">اگر لمسی جا بماند، صفحه «خانه» جای خالی را از روی موجودی پیدا می‌کند و خبر می‌دهد؛ پیامک را از <a href="{% url 'import' %}">وارد کردن پیامک</a> اضافه کنید.</p>
 </div>
 
@@ -109,8 +130,14 @@
         <li><b>Get Dictionary Value</b> — کلید <code>status</code> از <i>Contents of URL</i></li>
         <li><b>If</b> — <i>Dictionary Value</i> · <b>has any value</b> ← <b>Delete Files</b> ← <i>File</i> (Confirm Before Deleting خاموش) ← <b>End If</b></li>
       </ul></li>
-    <li><b>End If</b>. بعد در Automation: <b>Time of Day</b> ساعت ۳:۰۰ هر روز ← <b>Run Immediately</b> ← Run Shortcut «Sync SMS Queue».</li>
+    <li><b>End If</b>.</li>
   </ol>
+  <p>اتوماسیون شبانه:</p>
+  <ul>
+    <li><b>iOS ۱۷+:</b> Automation ← <b>+</b> ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← <b>Run Immediately</b> ← Next ← <b>New Blank Automation</b> ← Run Shortcut «Sync SMS Queue».</li>
+    <li><b>iOS ۱۶:</b> Automation ← <b>Create Personal Automation</b> (یا +) ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← Next ← <b>Add Action</b> ← Run Shortcut «Sync SMS Queue» ← Next ← <b>Ask Before Running</b> خاموش ← <b>Don't Ask</b> ← Done.
+      <div class="small muted">اتوماسیون ساعت‌دار در iOS ۱۶ بدون لمس اجرا می‌شود.</div></li>
+  </ul>
   <p class="muted small">فقط وقتی سرور جواب درست بدهد صف پاک می‌شود؛ خطا یا نبود اینترنت صف را نگه می‌دارد. ارسال تکراری هم مشکلی ندارد.</p>
 </div>
 
