@@ -1,5 +1,6 @@
 import sqlite3
 import tempfile
+from datetime import datetime
 from io import StringIO
 from unittest import mock
 
@@ -168,6 +169,15 @@ class TestReparseAndLegacy(BaseTest):
         t = Transaction.objects.get(user=self.user)
         self.assertEqual((t.amount, t.balance, t.account.bank), (2000, 8000, "test"))
         self.assertEqual(Message.objects.get().status, Message.PARSED)
+
+    def test_reparse_takes_the_year_from_when_the_sms_arrived(self):
+        # Melli sends no year: an old unparsed SMS re-parsed today must keep its own year
+        received = datetime(2025, 3, 22, 9, 0, tzinfo=parsers.TEHRAN)  # 1404-01-02
+        Message.objects.create(user=self.user, hash="m", received_at=received, status=Message.UNPARSED,
+                               raw="بانك ملي ايران\nانتقال:1,000-\nحساب:97007\nمانده:5,000\n1228-10:00")
+        self.assertEqual(ingest.reparse()["fixed"], 1)
+        t = Transaction.objects.get(user=self.user)
+        self.assertEqual(timezone.localtime(t.occurred_at).date().isoformat(), "2025-03-18")  # 1403-12-28
 
     def test_reparse_purges_stored_sensitive(self):
         Message.objects.create(user=self.user, hash="x", raw="کد تایید شما 1234", status=Message.UNPARSED)

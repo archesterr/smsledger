@@ -1,3 +1,5 @@
+import re
+
 import segno
 from django.conf import settings
 from django.contrib import messages
@@ -13,8 +15,16 @@ from ..forms import CodeForm, DeviceForm, PasswordConfirmForm, UnitPrefForm
 from ..models import Device, RecoveryCode, Transaction, User
 from .app import csv_response
 
-
 # ---- setup: devices + iPhone instructions -----------------------------------------------
+RE_IOS = re.compile(r"(?:iPhone|iPad|CPU) OS (\d+)_")
+
+
+def ios_version(request) -> int | None:
+    """Major iOS version from Safari's User-Agent, to open the right automation guide."""
+    m = RE_IOS.search(request.headers.get("User-Agent", ""))
+    return int(m.group(1)) if m else None
+
+
 def setup(request):
     u = request.user
     new_token = None
@@ -32,6 +42,7 @@ def setup(request):
         "shortcut_url": settings.SHORTCUT_URL,
         "connected": devices.filter(last_used_at__isnull=False).exists(),
         "has_sms": u.messages.exists(),
+        "ios": ios_version(request),
     })
 
 

@@ -330,6 +330,9 @@ tr:last-child td { border-bottom: 0; }
 .tip .r { display: flex; align-items: center; gap: 8px; }
 .tip .r b { font-weight: 700; }
 .tip .r .nm { color: var(--ink-2); }
+details.guide { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+details.guide summary { cursor: pointer; font-weight: 600; }
+details.guide[open] summary { margin-bottom: 8px; }
 details.table-view { margin-top: 12px; }
 details.table-view summary { cursor: pointer; color: var(--accent); font-size: 13.5px; }
 details.table-view table { margin-top: 8px; }
