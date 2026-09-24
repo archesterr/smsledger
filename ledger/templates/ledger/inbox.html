@@ -10,7 +10,7 @@
   <div class="head">
     <div>
       <div class="amt"><span class="num{% if t.direction == 'IN' %} good{% endif %}">{{ t|signed:unit }}</span> <span class="small muted">{{ unit|unit_label }}</span></div>
-      <div class="small muted">{{ t.occurred_at|jday }} · {{ t.occurred_at|jtime }} · {{ t.account.name }}</div>
+      <div class="small muted">{{ t.occurred_at|jday }} · {{ t.occurred_at|jtime }} · <span class="with-bank">{% bank_logo t.account %}{{ t.account.name }}</span></div>
       {% if t.title or t.counterparty %}<div class="small">{{ t.title }}{% if t.counterparty %} · {{ t.counterparty }}{% endif %}</div>{% endif %}
     </div>
     <a class="btn ghost small" href="{% url 'tx_detail' t.pk %}">جزئیات</a>

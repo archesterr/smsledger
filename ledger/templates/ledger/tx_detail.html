@@ -13,7 +13,7 @@
   <hr>
   <dl class="kv">
     <dt>زمان</dt><dd>{{ t.occurred_at|jday }} · {{ t.occurred_at|jtime }}</dd>
-    <dt>حساب</dt><dd>{{ t.account.name }}</dd>
+    <dt>حساب</dt><dd class="with-bank">{% bank_logo t.account %}{{ t.account.name }}</dd>
     {% if t.balance is not None %}<dt>مانده بعد از آن</dt><dd><span class="num">{{ t.balance|amount:unit }}</span></dd>{% endif %}
     {% if t.title %}<dt>عنوان بانک</dt><dd>{{ t.title }}</dd>{% endif %}
     {% if t.counterparty %}<dt>طرف حساب</dt><dd>{{ t.counterparty }}</dd>{% endif %}

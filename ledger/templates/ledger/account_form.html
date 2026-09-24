@@ -1,9 +1,18 @@
-{% extends "ledger/base.html" %}
+{% extends "ledger/base.html" %}{% load ledger %}
 {% block title %}حساب{% endblock %}
 {% block heading %}{% if a.pk %}ویرایش حساب{% else %}حساب جدید{% endif %}{% endblock %}
 {% block content %}
 <form method="post" class="card" novalidate>{% csrf_token %}
   {% include "ledger/_errors.html" %}
+  <fieldset class="field bank-pick">
+    <legend>{{ form.brand.label }}</legend>
+    <div class="bank-grid">{% for r in form.brand %}
+      <label class="bank-opt">{{ r.tag }}
+        {% if r.data.value %}{% bank_logo r.data.value "md" %}{% elif a.bank_info and a.bank %}{% bank_logo a.bank "md" %}{% else %}<span class="bank md none" aria-hidden="true">—</span>{% endif %}
+        <span class="name">{{ r.choice_label }}</span></label>{% endfor %}
+    </div>
+    {% if form.brand.errors %}<ul class="errorlist">{% for e in form.brand.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+  </fieldset>
   {% include "ledger/_field.html" with f=form.name %}
   {% if form.kind %}{% include "ledger/_field.html" with f=form.kind %}{% endif %}
   {% include "ledger/_field.html" with f=form.archived %}

@@ -6,7 +6,7 @@
 <p class="muted small">حساب‌های بانکی با اولین پیامک هر بانک خودکار ساخته می‌شوند. برای پول نقد یا حسابی که پیامک ندارد، حساب دستی بسازید.</p>
 <div class="card flush"><ul class="list">{% for x in accounts %}
   <li><a class="item" href="{% url 'account_edit' x.a.pk %}">
-    <span class="ico">{% if x.a.kind == 'cash' %}💵{% else %}🏦{% endif %}</span>
+    {% bank_logo x.a "md" as logo %}{% if logo %}{{ logo }}{% else %}<span class="ico">{% if x.a.kind == 'cash' %}💵{% else %}🏦{% endif %}</span>{% endif %}
     <span class="main"><span class="t1">{{ x.a.name }}{% if x.a.archived %} <span class="pill">بایگانی</span>{% endif %}</span>
       <span class="t2">{{ x.n|fa }} تراکنش{% if x.a.bank %} · از پیامک{% endif %}</span></span>
     {% if x.bal %}<span class="amt"><span class="num">{{ x.bal.balance|amount:unit }}</span><small>طبق آخرین پیامک</small></span>{% endif %}

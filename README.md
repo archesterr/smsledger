@@ -7,6 +7,8 @@ Invite-only, per-user isolation, 2FA, no OTP ever stored.
 
 Banks: **Blu, Saman, Middle East Bank (خاورمیانه), Pasargad, Melli**. SMS from other banks are
 kept and parsed automatically once their template is added.
+Every account shows its bank's logo and colour: SMS accounts automatically, and for a manual
+account you pick one of 32 Iranian banks (Accounts → the account → بانک).
 
 ```
 iPhone (each user)                                  Server (docker compose)
@@ -235,7 +237,12 @@ and unparsed SMS, all on the home page.
    `ledger/tests/test_parsers.py`. If the SMS carries a masked account/card number, return it
    as `Tx.account` (only its last 4 digits, via `last4`) so each account gets its own balance
    chain. If the bank sends no year, use `infer_datetime(month, day, h, m, ref)`.
-3. Deploy. Existing unparsed SMS of every user are re-parsed automatically.
+   If the bank's name line may be missing from the text (it is sometimes only the sender),
+   implement `sniff()` to recognise the bank by its layout.
+3. The parser's `name` must be a key in `ledger/banks.py` (logo + colour). For a bank not
+   listed there: add a `Bank(...)`, put its square SVG logo in `ledger/static/ledger/banks/<key>.svg`,
+   and run `python -m ledger.banks` to regenerate `banks.css` (a test checks it's current).
+4. Deploy. Existing unparsed SMS of every user are re-parsed automatically.
 
 ---
 

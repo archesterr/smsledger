@@ -157,7 +157,7 @@ def manifest(request):
 @login_not_required
 @require_GET
 def service_worker(request):
-    assets = [static("ledger/app.css"), static("ledger/app.js"),
+    assets = [static("ledger/app.css"), static("ledger/banks.css"), static("ledger/app.js"),
               static("ledger/fonts/Vazirmatn-wght.woff2"), static("ledger/icons/icon.svg")]
     # hashed static names change with their content, so this changes on every asset update
     version = security.sha256("|".join(assets))[:12]
