@@ -1,5 +1,5 @@
 {% load ledger %}<li><a class="item" href="{% url 'tx_detail' t.pk %}">
-  <span class="ico" aria-hidden="true">{% if t.category %}{{ t.category.icon|default:"•" }}{% elif t.direction == 'IN' %}⬇️{% else %}⬆️{% endif %}</span>
+  <span class="ico" aria-hidden="true">{% if t.category %}{{ t.category.icon|default:"•" }}{% elif t.direction == 'IN' %}⬇️{% else %}⬆️{% endif %}{% bank_logo t.account %}</span>
   <span class="main">
     <span class="t1">{% if t.category %}{{ t.category.name }}{% else %}{{ t.title|default:"بدون دسته" }}{% endif %}{% if t.note %} · <span class="muted">{{ t.note }}</span>{% endif %}</span>
     <span class="t2">{% if show_date %}{{ t.occurred_at|jdate }} {% endif %}{{ t.occurred_at|jtime }} · {{ t.account.name }}{% if not t.category %} · <span class="pill warn">بدون دسته</span>{% endif %}{% if t.gap_amount is not None %} · <span class="flag">⚠️ پیامک جاافتاده</span>{% endif %}</span>

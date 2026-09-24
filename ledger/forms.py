@@ -6,7 +6,7 @@ from datetime import datetime
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 
-from . import jalali, money
+from . import banks, jalali, money
 from .models import DIRECTIONS, Account, Category, Rule, User
 
 TIME_RE = re.compile(r"^\s*(\d{1,2})\s*:\s*(\d{2})\s*$")
@@ -216,15 +216,35 @@ class RuleForm(UnitForm, forms.ModelForm):
 
 
 class AccountForm(forms.ModelForm):
+    brand = forms.ChoiceField(label="بانک (لوگو و رنگ)", required=False, choices=banks.CHOICES,
+                              widget=forms.RadioSelect)
+
     class Meta:
         model = Account
-        fields = ["name", "kind", "archived"]
+        fields = ["brand", "name", "kind", "archived"]
         labels = {"name": "نام", "kind": "نوع", "archived": "بایگانی"}
+        help_texts = {"name": "خالی بگذارید تا اسم بانک گذاشته شود."}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["name"].required = False
+        sms_bank = banks.get(self.instance.bank) if self.instance.pk else None
         if self.instance.pk and self.instance.bank:  # SMS accounts stay "bank"
             del self.fields["kind"]
+        if sms_bank:  # "" means: the bank the SMS came from
+            self.fields["brand"].choices = [("", f"خودکار ({sms_bank.label})"), *banks.CHOICES[1:]]
+
+    def clean(self):
+        data = super().clean()
+        if not data.get("name"):
+            b = banks.get(data.get("brand"))
+            if not b:
+                self.add_error("name", "نام حساب را بنویسید یا یک بانک انتخاب کنید.")
+            else:
+                data["name"] = b.label
+        if data.get("brand") and "kind" in self.fields:  # a bank logo means a bank account
+            data["kind"] = Account.BANK
+        return data
 
 
 class ImportForm(forms.Form):

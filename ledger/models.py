@@ -7,7 +7,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from . import jalali
+from . import banks, jalali
 
 IN, OUT = "IN", "OUT"
 DIRECTIONS = [(IN, "دریافت"), (OUT, "پرداخت")]
@@ -73,6 +73,7 @@ class Account(models.Model):
     kind = models.CharField(max_length=4, choices=KINDS, default=BANK)
     bank = models.CharField(max_length=20, blank=True)  # parser name, "" for manual accounts
     hint = models.CharField(max_length=40, blank=True)  # masked number from the SMS, "" if the bank sends none
+    brand = models.CharField(max_length=20, blank=True)  # banks.BANKS key for logo/colour; "" = use `bank`
     name = models.CharField(max_length=60)
     archived = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -85,6 +86,10 @@ class Account(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def bank_info(self) -> banks.Bank | None:
+        return banks.get(self.brand or self.bank)
 
 
 class Category(models.Model):

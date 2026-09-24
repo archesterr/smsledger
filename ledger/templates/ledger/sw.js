@@ -30,6 +30,13 @@ self.addEventListener("fetch", (e) => {
     return;
   }
   if (url.pathname.startsWith("/static/")) {
-    e.respondWith(caches.match(req).then((hit) => hit || fetch(req)));
+    // bank logos etc. are cached on first use (names are content-hashed, so a hit is never stale)
+    e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((r) => {
+      if (r.ok && /\.[0-9a-f]{12}\.\w+$/.test(url.pathname)) {
+        const copy = r.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy));
+      }
+      return r;
+    })));
   }
 });

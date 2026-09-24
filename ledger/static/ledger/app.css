@@ -197,6 +197,40 @@ a.item:hover { background: var(--hover); text-decoration: none; }
   display: flex; align-items: center; justify-content: center; font-size: 18px; flex: none;
 }
 .item .main { flex: 1; min-width: 0; }
+
+/* ---- bank logos: a white tile in every theme (logos are drawn for white), ringed in the bank's
+   colour (--bk, from banks.css). Decorative: the account name is always next to it. ---- */
+.bank {
+  --bk: var(--line-strong);
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 20px; height: 20px; padding: 2px; border-radius: 6px; background: #fff;
+  box-shadow: 0 0 0 1.5px var(--bk); vertical-align: -5px;
+}
+.bank img { width: 100%; height: 100%; display: block; }
+.bank.md { width: 38px; height: 38px; padding: 5px; border-radius: 12px; box-shadow: 0 0 0 2px var(--bk); }
+.bank.none { color: var(--muted); background: var(--track); box-shadow: none; font-size: 16px; }
+/* on a transaction's category icon: the bank's badge in the corner, with a gap ring */
+.item .ico { position: relative; }
+.item .ico .bank {
+  position: absolute; inset-block-end: -5px; inset-inline-end: -5px; width: 20px; height: 20px;
+  box-shadow: 0 0 0 1.5px var(--bk), 0 0 0 3.5px var(--surface);
+}
+.with-bank { display: inline-flex; align-items: center; gap: 6px; }
+/* account form: pick a bank by its logo */
+.bank-pick { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
+.bank-pick legend { padding: 0; margin-bottom: 8px; font-weight: 550; }
+.bank-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px;
+  max-height: 290px; overflow-y: auto; padding: 4px; }
+.bank-opt {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px 8px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; text-align: center;
+}
+.bank-opt .name { font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+.bank-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.bank-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-wash);
+  box-shadow: 0 0 0 1px var(--accent); }
+.bank-opt:has(input:checked) .name { color: var(--ink); font-weight: 600; }
+.bank-opt:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .item .t1 { display: block; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item .t2 { display: block; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; }

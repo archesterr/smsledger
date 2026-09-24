@@ -44,7 +44,7 @@
 {% if balances %}
 <div class="section-head"><h2>موجودی حساب‌ها</h2></div>
 <div class="card flush"><ul class="list">{% for b in balances %}
-  <li><div class="item"><span class="ico">🏦</span><span class="main"><span class="t1">{{ b.account.name }}</span>
+  <li><div class="item">{% bank_logo b.account "md" as logo %}{% if logo %}{{ logo }}{% else %}<span class="ico">🏦</span>{% endif %}<span class="main"><span class="t1">{{ b.account.name }}</span>
     <span class="t2">طبق آخرین پیامک، {{ b.at|ago }}</span></span>
     <span class="amt"><span class="num">{{ b.balance|amount:unit }}</span></span></div></li>{% endfor %}
 </ul></div>

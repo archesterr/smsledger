@@ -1,7 +1,9 @@
 from django import template
+from django.templatetags.static import static
 from django.utils import timezone
+from django.utils.html import format_html
 
-from .. import jalali, money
+from .. import banks, jalali, money
 
 register = template.Library()
 WEEKDAYS = ("دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه", "یکشنبه")  # by date.weekday()
@@ -83,3 +85,16 @@ def ago(dt):
         if s >= size:
             return money.fa_digits(f"{s // size} {name} پیش")
     return ""
+
+
+@register.simple_tag
+def bank_logo(account_or_key, size=""):
+    """Bank logo tile (white, ringed in the bank's colour). Decorative: the account name is always
+    next to it. Empty for cash / no-brand accounts. size: "" (badge), "md" (list icon), "lg"."""
+    b = banks.get(account_or_key) if isinstance(account_or_key, str) else getattr(account_or_key, "bank_info", None)
+    if not b:
+        return ""
+    return format_html(
+        '<span class="bank bk-{}{}" title="{}"><img src="{}" alt="" width="48" height="48" decoding="async"></span>',
+        b.key, f" {size}" if size else "", b.label, static(f"ledger/banks/{b.key}.svg"),
+    )
