@@ -15,7 +15,7 @@ from . import jalali
 TEHRAN = jalali.TEHRAN
 
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
-_CHARS = str.maketrans({"ي": "ی", "ك": "ک", "٬": ",", "：": ":"})
+_CHARS = str.maketrans({"ي": "ی", "ى": "ی", "ك": "ک", "٬": ",", "：": ":"})
 _INVISIBLE = re.compile(r"[‌‍‎‏؜‪-‮⁦-⁩﻿]")
 
 # One-time passwords and login codes must never be stored or forwarded. Dynamic-password SMS
@@ -32,7 +32,8 @@ _SENSITIVE = re.compile(
 
 def normalize(text: str) -> str:
     text = _INVISIBLE.sub("", text).translate(_DIGITS).translate(_CHARS)
-    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in text.replace("\r", "").split("\n")]
+    # splitlines, not split("\n"): copied text may break lines with \r or U+2028
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in text.splitlines()]
     return "\n".join(ln for ln in lines if ln)
 
 
@@ -77,6 +78,11 @@ class BankParser:
 
     def match(self, text: str) -> bool:
         raise NotImplementedError
+
+    def sniff(self, text: str) -> bool:
+        """Fallback when no match(): the bank's name line is sometimes only the sender, not in
+        the body (a copied SMS, some phones). Recognise the bank by its layout instead."""
+        return False
 
     def parse(self, text: str, ref: datetime | None = None) -> Tx:
         """ref: when the SMS was received; banks that send no year get it from here."""
@@ -171,10 +177,15 @@ class BluParser(BankParser):
         first = text.split("\n", 1)[0]
         return first.strip() in ("بلو", "blu", "Blu") or first.startswith("بلو")
 
+    def sniff(self, text: str) -> bool:
+        return bool(re.search(r"ریال\s*(?:از|به)\s*حساب\s*شما\s*(?:پرید|نشست)", text))
+
     def parse(self, text: str, ref: datetime | None = None) -> Tx:
         lines = text.split("\n")
-        title = lines[1] if len(lines) > 1 else ""
-        body = "\n".join(lines[2:])
+        if self.match(text):
+            lines = lines[1:]
+        title = lines[0] if lines else ""
+        body = "\n".join(lines[1:])
 
         m = self.RE_AMOUNT.search(body)
         if not m:
@@ -329,9 +340,12 @@ class MelliParser(BankParser):
     def match(self, text: str) -> bool:
         return text.startswith("بانک ملی")
 
+    def sniff(self, text: str) -> bool:
+        return bool(self.RE_WHEN.search(text)) and bool(re.search(r"^مانده\s*:", text, re.M))
+
     def parse(self, text: str, ref: datetime | None = None) -> Tx:
         title = amount = direction = None
-        for ln in text.split("\n")[1:]:
+        for ln in text.split("\n")[1 if self.match(text) else 0:]:
             m = self.RE_LINE.match(ln)
             if m and not m.group(1).startswith(self.NOT_AMOUNT):
                 sa = signed_amount(m.group(2))
@@ -355,10 +369,12 @@ def parse(raw: str, ref: datetime | None = None) -> tuple[Tx | None, str | None]
     """Returns (tx, error). Never raises: unknown/broken SMS still gets stored as unparsed.
     ref = when the SMS was received (default now); used by banks that send no year."""
     text = normalize(raw)
-    for p in PARSERS:
-        if p.match(text):
-            try:
-                return p.parse(text, ref), None
-            except ParseError as e:
-                return None, f"{p.name}: {e}"
-    return None, "no parser matched"
+    p = next((p for p in PARSERS if p.match(text)), None)
+    if not p and not text.startswith("بانک"):  # a named bank we don't know is not sniffed as another
+        p = next((p for p in PARSERS if p.sniff(text)), None)
+    if not p:
+        return None, "no parser matched"
+    try:
+        return p.parse(text, ref), None
+    except ParseError as e:
+        return None, f"{p.name}: {e}"

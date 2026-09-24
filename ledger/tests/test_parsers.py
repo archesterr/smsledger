@@ -177,6 +177,20 @@ class TestOtherBanks(unittest.TestCase):
         self.assertEqual(tx.occurred_at.isoformat(), when)
         self.assertEqual((tx.title, tx.account), (title, account))
 
+    def test_copied_without_bank_line(self):
+        # iPhone copy / some carriers: the bank name is only the sender, and lines may break with \r or U+2028
+        self.check(BLU_REAL.split("\n", 1)[1], "blu", "OUT", 1_000_000, 1_887_139, "2026-09-23T20:25:00+03:30",
+                   "برداشت پول", "")
+        self.check(MELLI_OUT.split("\n", 1)[1], "melli", "OUT", 80_035_500, 35_206_324, "2026-09-20T18:26:00+03:30",
+                   "انتقال", "7007")
+        for sep in ("\r", "\r\n", "\u2028", "\u2029"):
+            self.assertIsNone(parsers.parse(BLU_REAL.replace("\n", sep), REF)[1], repr(sep))
+            self.assertIsNone(parsers.parse(MELLI_OUT.replace("\n", sep), REF)[1], repr(sep))
+        self.assertEqual(parsers.parse(MELLI_OUT.replace("ي", "ى"), REF)[0].bank, "melli")
+        # an unknown bank with the same wording stays unparsed instead of being filed under Blu/Melli
+        for raw in ("بانک تست\n" + BLU_REAL.split("\n", 1)[1], "بانک تست\n" + MELLI_OUT.split("\n", 1)[1]):
+            self.assertEqual(parsers.parse(raw, REF), (None, "no parser matched"))
+
     def test_real_samples(self):
         self.check(BLU_REAL, "blu", "OUT", 1_000_000, 1_887_139, "2026-09-23T20:25:00+03:30", "برداشت پول", "")
         self.check(SAMAN_OUT, "saman", "OUT", 20_000_000, 36_634_778, "2026-09-23T18:50:00+03:30",
