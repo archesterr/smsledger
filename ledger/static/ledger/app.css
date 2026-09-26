@@ -175,6 +175,7 @@ main { max-width: 760px; margin: 0 auto; padding: 16px; }
   color: var(--ink);
 }
 .alert + .alert { margin-top: 8px; }
+.alert + .card { margin-top: 12px; }
 .alert .ico { font-size: 17px; line-height: 1.4; flex: none; }
 .alert.warning { background: var(--warning-wash); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
 .alert.critical { background: var(--critical-wash); border-color: color-mix(in srgb, var(--critical) 40%, transparent); }

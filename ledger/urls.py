@@ -46,6 +46,8 @@ urlpatterns = [
     # me
     path("setup/", me.setup, name="setup"),
     path("setup/devices/<int:pk>/revoke/", me.device_revoke, name="device_revoke"),
+    path("setup/devices/<int:pk>/status/", me.device_status, name="device_status"),
+    path("setup/shortcut/", me.shortcut_file, name="shortcut_file"),
     path("settings/", me.settings_view, name="settings"),
     path("settings/2fa/", me.twofa_setup, name="twofa_setup"),
     path("settings/2fa/disable/", me.twofa_disable, name="twofa_disable"),

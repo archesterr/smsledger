@@ -13,7 +13,7 @@ from itertools import groupby
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 
-from . import parsers, rules, vault
+from . import parsers, rules, security, vault
 from .models import Account, Message, Transaction, User
 
 log = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ MAX_SMS_CHARS = 2000
 # What arrives when the Shortcut has the words typed in instead of the blue variable
 # (English and Persian iOS). Not an SMS: rejected with a hint instead of stored as "unparsed".
 PLACEHOLDERS = {"shortcut input", "ورودی میانبر", "ورودی میان بر"}
+RE_KEY = re.compile(rf"bearer\s+{security.TOKEN_PREFIX}", re.I)
 
 
 class Batch:
@@ -72,6 +73,9 @@ def ingest_one(user, raw: str, source: str, device=None, batch: Batch | None = N
     if parsers.normalize(raw).casefold() in PLACEHOLDERS:
         return {"status": "ignored", "reason": "placeholder",
                 "hint": "Shortcut Input must be the blue variable, not typed text"}
+    if RE_KEY.match(raw):
+        # a Connect tap ran an old hand-made shortcut, which sent the new key as if it were an SMS
+        return {"status": "ignored", "reason": "key"}
     if parsers.is_sensitive(raw):
         # never stored, never logged: not even the hash
         return {"status": "ignored", "reason": "sensitive"}

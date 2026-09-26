@@ -137,7 +137,7 @@ class PasswordConfirmForm(forms.Form):
 
 
 class DeviceForm(forms.Form):
-    name = forms.CharField(label="نام دستگاه", max_length=60, initial="iPhone")
+    name = forms.CharField(label="نام دستگاه", max_length=60, required=False)
 
 
 # ---- money ------------------------------------------------------------------

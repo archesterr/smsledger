@@ -6,11 +6,12 @@ from django.contrib import messages
 from django.contrib.auth import logout, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.db import transaction
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
-from .. import audit, security
+from .. import audit, security, shortcut
 from ..forms import CodeForm, DeviceForm, PasswordConfirmForm, UnitPrefForm
 from ..models import Device, RecoveryCode, Transaction, User
 from .app import csv_response
@@ -27,24 +28,54 @@ def ios_version(request) -> int | None:
 
 def setup(request):
     u = request.user
-    new_token = None
-    form = DeviceForm(request.POST or None)
+    ios = ios_version(request)
+    new_token = new_device = None
+    form = DeviceForm(request.POST if request.method == "POST" else None)
     if request.method == "POST" and form.is_valid():
         token = security.new_token()
-        Device.objects.create(user=u, name=form.cleaned_data["name"], token_hash=security.sha256(token),
-                              token_prefix=token[:8])
+        name = form.cleaned_data["name"] or (f"iPhone · iOS {ios}" if ios else "iPhone")
+        with transaction.atomic():
+            # keys from earlier taps that never reached the server are just loose ends
+            stale = u.devices.filter(revoked_at__isnull=True, last_used_at__isnull=True).update(
+                revoked_at=timezone.now())
+            new_device = Device.objects.create(user=u, name=name, token_hash=security.sha256(token),
+                                               token_prefix=token[:8])
+        if stale:
+            audit.record(u, "device_revoked", request)
         audit.record(u, "device_added", request)
         new_token = token  # shown once, in this response only; the DB keeps just the hash
         form = DeviceForm()
     devices = u.devices.filter(revoked_at__isnull=True).order_by("-created_at")
     return render(request, "ledger/setup.html", {
-        "nav": "more", "form": form, "new_token": new_token, "devices": devices,
+        "nav": "more", "form": form, "new_token": new_token, "new_device": new_device, "devices": devices,
+        "connect_url": shortcut.connect_url(new_token) if new_token else None,
         "ingest_url": request.build_absolute_uri("/ingest"),
-        "shortcut_url": settings.SHORTCUT_URL,
+        "shortcut_url": settings.SHORTCUT_URL, "shortcut_name": shortcut.NAME,
+        "otp_pattern": shortcut.OTP_PATTERN,
         "connected": devices.filter(last_used_at__isnull=False).exists(),
         "has_sms": u.messages.exists(),
-        "ios": ios_version(request),
+        "ios": ios,
+        # opened on a computer: the Connect button only works on the iPhone itself
+        "phone_qr": None if ios else segno.make(request.build_absolute_uri(request.path), error="m").svg_inline(
+            scale=5, omitsize=True, dark="#111", light="#fff", border=2),
     })
+
+
+@require_GET
+def device_status(request, pk):
+    """Polled by the setup page while the Shortcut runs the Connect step."""
+    d = get_object_or_404(Device, pk=pk, user=request.user)
+    return JsonResponse({"connected": d.revoked_at is None and d.last_used_at is not None})
+
+
+@require_GET
+def shortcut_file(request):
+    """The unsigned Shortcut with this server's address in it, for `shortcuts sign` on a Mac.
+    It holds no key: the Connect button puts each phone's own key next to it."""
+    resp = HttpResponse(shortcut.build(request.build_absolute_uri("/ingest")),
+                        content_type="application/octet-stream")
+    resp["Content-Disposition"] = f'attachment; filename="{shortcut.NAME}.shortcut"'
+    return resp
 
 
 @require_POST
