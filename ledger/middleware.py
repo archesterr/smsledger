@@ -4,7 +4,7 @@ from django.contrib.auth import logout
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from . import audit, ingest, parsers, vault
+from . import audit, ingest, money, parsers, vault
 from .models import Message, User
 
 CSP = "; ".join([
@@ -101,7 +101,7 @@ class VaultMiddleware:
                 return self.signout(request, "نشست شما تمام شده. دوباره وارد شوید.")
             vault.keyring()[user.pk] = dek
             if not free:
-                self.catch_up(user)
+                self.catch_up(request, user)
                 if user.recovery_saved_at is None:
                     return redirect("recovery_key")
         elif not free:  # LOCKED (or no keys): only the unlock page helps
@@ -109,9 +109,14 @@ class VaultMiddleware:
         return self.get_response(request)
 
     @staticmethod
-    def catch_up(user):
-        if user.messages.filter(status=Message.PENDING).exists():
-            ingest.process_pending(user)
+    def catch_up(request, user):
+        pending = user.messages.filter(status=Message.PENDING)
+        if pending.exists():
+            ingest.process_pending(user, budget=ingest.PENDING_BUDGET)
+            left = pending.count()
+            if left and request.method == "GET":  # a whole backup: the next page load carries on
+                messages.info(request, f"ثبت پیامک‌های قدیمی ادامه دارد: {money.fa_digits(left)} پیامک مانده؛ "
+                                       "صفحه را تازه کنید.")
         if user.parsers_version != parsers.VERSION:
             ingest.reparse(user)
             User.objects.filter(pk=user.pk).update(parsers_version=parsers.VERSION)

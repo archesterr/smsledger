@@ -36,7 +36,7 @@ def setup(request):
         name = form.cleaned_data["name"] or (f"iPhone · iOS {ios}" if ios else "iPhone")
         with transaction.atomic():
             # keys from earlier taps that never reached the server are just loose ends
-            stale = u.devices.filter(revoked_at__isnull=True, last_used_at__isnull=True).update(
+            stale = u.devices.phones().filter(revoked_at__isnull=True, last_used_at__isnull=True).update(
                 revoked_at=timezone.now())
             new_device = Device.objects.create(user=u, name=name, token_hash=security.sha256(token),
                                                token_prefix=token[:8])
@@ -45,7 +45,7 @@ def setup(request):
         audit.record(u, "device_added", request)
         new_token = token  # shown once, in this response only; the DB keeps just the hash
         form = DeviceForm()
-    devices = u.devices.filter(revoked_at__isnull=True).order_by("-created_at")
+    devices = u.devices.phones().filter(revoked_at__isnull=True).order_by("-created_at")
     return render(request, "ledger/setup.html", {
         "nav": "more", "form": form, "new_token": new_token, "new_device": new_device, "devices": devices,
         "connect_url": shortcut.connect_url(new_token) if new_token else None,

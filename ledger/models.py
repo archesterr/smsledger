@@ -155,8 +155,17 @@ class Invite(models.Model):
         return self.used_at is None and self.expires_at > timezone.now()
 
 
+class DeviceQuerySet(models.QuerySet):
+    def live(self):
+        return self.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()), revoked_at__isnull=True)
+
+    def phones(self):
+        return self.filter(expires_at__isnull=True)
+
+
 class Device(models.Model):
-    """A phone (Shortcut) allowed to send SMS. Its token can only write via /ingest, never read."""
+    """A phone (Shortcut) allowed to send SMS. Its token can only write via /ingest, never read.
+    A key with expires_at is a computer's one-off sync of old SMS (sync_client.py), not a phone."""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="devices")
     name = models.CharField(max_length=60)
     token_hash = models.CharField(max_length=64, unique=True)
@@ -165,6 +174,9 @@ class Device(models.Model):
     last_used_at = models.DateTimeField(null=True, blank=True)
     last_ip = models.CharField(max_length=45, blank=True)  # network prefix only (security.ip_prefix)
     revoked_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    objects = DeviceQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.name} ({self.token_prefix}…)"
@@ -376,6 +388,7 @@ class SecurityEvent(models.Model):
         "sessions_revoked": "خروج همه دستگاه‌های دیگر",
         "device_added": "کلید آیفون جدید ساخته شد",
         "device_revoked": "کلید آیفون باطل شد",
+        "sync_key": "دستور همگام‌سازی پیامک‌های قدیمی (رایانه) ساخته شد",
         "export": "دریافت خروجی همه داده‌ها",
         "disabled": "حساب توسط مدیر غیرفعال شد",
         "enabled": "حساب توسط مدیر فعال شد",

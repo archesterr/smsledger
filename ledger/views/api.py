@@ -1,7 +1,9 @@
 import hmac
 import json
+import re
 from collections import Counter
 from datetime import timedelta
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_not_required
@@ -15,8 +17,9 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from .. import audit, ingest, security
+from .. import audit, ingest, security, shortcut
 from ..models import Device, Message, Transaction, User
+from .app import import_periods
 
 
 def device_from_request(request) -> Device | None:
@@ -26,8 +29,8 @@ def device_from_request(request) -> Device | None:
     token = auth[7:].strip()
     if not token.startswith(security.TOKEN_PREFIX) or len(token) > 100:
         return None
-    return (Device.objects.select_related("user")
-            .filter(token_hash=security.sha256(token), revoked_at__isnull=True, user__is_active=True).first())
+    return (Device.objects.live().select_related("user")
+            .filter(token_hash=security.sha256(token), user__is_active=True).first())
 
 
 # shown on the phone by the Shortcut's Connect step ("message" from the reply)
@@ -55,7 +58,9 @@ def _touch(device: Device, ip: str) -> None:
 def ingest_view(request):
     """POST /ingest   Authorization: Bearer sml_...
     Body: JSON {"sms": "..." | [...], "source": "..."}, or text/plain (?split=1 splits on '---' lines).
+    Old SMS from an iPhone backup (sync_client.py): JSON {"items": [{"text": "...", "at": <ms>}]}.
     ?source=connect is the Shortcut's hello after the setup page's Connect button: no body.
+    ?source=done is sync_client.py finishing: its one-off key is revoked.
     The device token can only add SMS. It can't read anything back."""
     ip = security.client_ip(request)
     if security.INGEST_BAD.blocked(ip):
@@ -74,6 +79,10 @@ def ingest_view(request):
             f"✅ این آیفون به حساب «{device.user.username}» وصل شد.\n"
             "به صفحه راه‌اندازی برگردید و اتوماسیون پیامک را بسازید.")},
             json_dumps_params={"ensure_ascii": False})
+    if source == "done":
+        if device.expires_at:
+            Device.objects.filter(pk=device.pk).update(revoked_at=timezone.now())
+        return JsonResponse({"status": "done"})
     try:
         body = request.body.decode("utf-8", "replace")
     except RequestDataTooBig:
@@ -86,6 +95,14 @@ def ingest_view(request):
             return _error("bad json", 400)
         if not isinstance(data, dict):
             return _error("bad json", 400)
+        if "items" in data:
+            batch = ingest.backup_items(data["items"])
+            if batch is None:
+                return _error(f"items: a list of 1-{ingest.MAX_ITEMS} {{text, at}}", 400)
+            texts, times = batch
+            results = ingest.ingest(device.user, texts, str(data.get("source") or "backup"), device, times)
+            _touch(device, ip)
+            return JsonResponse({"status": "ok", "count": dict(Counter(r["status"] for r in results))})
         sms = data.get("sms")
         source = str(data.get("source") or source)
         items = sms if isinstance(sms, list) else [sms]
@@ -128,7 +145,7 @@ def metrics(request):
     by_status = dict(Counter(Message.objects.values_list("status", flat=True)))
     last = Message.objects.aggregate(m=Max("received_at"))["m"]
     silent_before = now - timedelta(days=settings.SILENT_DAYS)
-    silent = (User.objects.filter(is_active=True, devices__revoked_at__isnull=True)
+    silent = (User.objects.filter(is_active=True, devices__revoked_at__isnull=True, devices__expires_at__isnull=True)
               .annotate(last=Max("messages__received_at"))
               .filter(last__lt=silent_before).distinct().count())
     lines = [
@@ -137,7 +154,7 @@ def metrics(request):
         f"smsledger_users {User.objects.filter(is_active=True).count()}",
         "# HELP smsledger_devices Devices with a live token.",
         "# TYPE smsledger_devices gauge",
-        f"smsledger_devices {Device.objects.filter(revoked_at__isnull=True).count()}",
+        f"smsledger_devices {Device.objects.live().count()}",
         "# HELP smsledger_messages Stored SMS by parse status.",
         "# TYPE smsledger_messages gauge",
         *(f'smsledger_messages{{status="{s}"}} {by_status.get(s, 0)}'
@@ -193,3 +210,20 @@ def service_worker(request):
 @require_GET
 def offline(request):
     return render(request, "ledger/offline.html")
+
+
+SYNC_CLIENT = Path(__file__).resolve().parent.parent / "sync_client.py"
+RE_CONFIG = re.compile(r"^CONFIG = .*$", re.M)
+
+
+@login_not_required
+@require_GET
+def sync_script(request):
+    """sync_client.py with this server's address, the Shamsi periods and the OTP filter filled in.
+    It holds no key: the import page's command passes one."""
+    config = {"server": request.build_absolute_uri("/"), "otp": shortcut.OTP_PATTERN,
+              "periods": [{k: p[k] for k in ("key", "en", "start")} for p in import_periods()]}
+    source = RE_CONFIG.sub(lambda _: f"CONFIG = {config!r}", SYNC_CLIENT.read_text(encoding="utf-8"), count=1)
+    resp = HttpResponse(source, content_type="text/x-python; charset=utf-8")
+    resp["Cache-Control"] = "no-cache"
+    return resp

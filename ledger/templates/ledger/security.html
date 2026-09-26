@@ -42,7 +42,7 @@
   <li><div class="item">
     <span class="ico" aria-hidden="true">🔑</span>
     <span class="main">
-      <span class="t1">{{ d.name }} <span class="muted small mono">{{ d.token_prefix }}…</span>{% if d.stale %} <span class="pill warn">بی‌استفاده</span>{% endif %}</span>
+      <span class="t1">{{ d.name }} <span class="muted small mono">{{ d.token_prefix }}…</span>{% if d.stale %} <span class="pill warn">بی‌استفاده</span>{% endif %}{% if d.expires_at %} <span class="pill">موقت</span>{% endif %}</span>
       <span class="t2">{% if d.last_used_at %}آخرین ارسال {{ d.last_used_at|ago }}{% if d.last_ip %} · <bdi dir="ltr">{{ d.last_ip }}</bdi>{% endif %}{% else %}هنوز استفاده نشده{% endif %}</span>
     </span>
     <form method="post" action="{% url 'device_revoke' d.pk %}" data-confirm="این کلید باطل شود؟ آیفونی که از آن استفاده می‌کند دیگر نمی‌تواند پیامک بفرستد.">{% csrf_token %}

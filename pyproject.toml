@@ -8,6 +8,10 @@ line-length = 120
 target-version = "py311"
 extend-exclude = ["ledger/migrations"]
 
+# runs on the user's own computer, on whatever python3 it has
+[tool.ruff.per-file-target-version]
+"ledger/sync_client.py" = "py38"
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "DJ"]
 ignore = [
@@ -19,6 +23,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "ledger/tests/*" = ["S"]
+# runs on the user's computer: starts the backup tool, talks to the server, reads sms.db
+"ledger/sync_client.py" = ["S310", "S603", "S607", "S608"]
 
 [tool.ruff.lint.isort]
 split-on-trailing-comma = false
