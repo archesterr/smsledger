@@ -181,12 +181,48 @@ Everything is explained in Persian inside the app, with the user's own server UR
    = Shortcut Input) → Next → turn off *Ask Before Running* → Done. Each SMS then shows a
    notification to tap. The setup page opens the guide for the phone's iOS version.
 4. **Nightly automation** (recommended): Time of Day 03:00 → Run Shortcut *SMS to Ledger*, no input.
-5. **Old SMS** (**وارد کردن پیامک**): iOS lets nothing read existing SMS, so history comes from an
-   iPhone backup, or by pasting. Duplicates are always ignored.
+5. **Old SMS** (**وارد کردن پیامک‌های قدیمی**): iOS lets nothing read existing SMS, so history comes
+   from an iPhone backup: one command on Linux/Mac, a backup file in the browser, or pasting.
+   Duplicates are always ignored.
 
-### Old SMS from an iPhone backup
+### Old SMS: one command on a Linux or Mac computer
 
-The import page reads the backup's message database (`sms.db`, stored in a backup as
+iOS gives no app or Shortcut access to SMS already on the phone; a backup is the only way out.
+**وارد کردن پیامک‌های قدیمی → ساخت دستور** gives a command to paste into a terminal:
+
+```bash
+python3 -c "import urllib.request as u; exec(u.urlopen('https://SERVER/sync.py').read())" sml_…
+```
+
+(Only `python3` is needed: no curl, and the terminal stays free for its questions.)
+
+[`ledger/sync_client.py`](ledger/sync_client.py) (standard library only; served at `/sync.py` with
+the server's address, the Shamsi periods and the OTP filter filled in) then, on that computer:
+
+1. installs [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) into its own virtualenv
+   under `~/.local/share/smsledger-sync` (first run: ~350 MB, wheels only; it offers
+   `sudo apt-get install python3-venv usbmuxd` if those are missing);
+2. waits for the iPhone on USB and runs `backup2 backup --only sms`: the phone still streams its
+   whole backup the first time (10-60 min), but **only `sms.db` is written to disk**, and later runs
+   are incremental (a minute or two). Pairing is the usual "Trust This Computer?" + passcode;
+3. reads the bank SMS locally with the same rules as the browser reader below, decrypting with
+   pyiosbackup if the backups are encrypted (the password is asked with `getpass` and piped, never
+   on a command line);
+4. lists senders (mobile numbers unticked) and the count per period, asks, and posts the chosen SMS
+   to `/ingest` as `{"items": [{"text", "at"}]}`, 200 per request, then `?source=done`.
+
+The key is a `Device` with `expires_at` (24 h): it can only add SMS like a phone's, it's revoked by
+`?source=done` or by making a new command, and it isn't a phone (setup page, silent-phone checks).
+The SMS arrive sealed, like a phone's, and are recorded on the owner's next page loads with their
+own arrival time. A page load records pending SMS for at most `PENDING_BUDGET` (20 s) and says how
+many are left, so a years-long backup never hits the worker timeout.
+
+`--db PATH` skips the iPhone and reads an existing `sms.db`, backup folder, or a Mac's
+`~/Library/Messages/chat.db`; `--period` and `--yes` skip the questions.
+
+### Old SMS from an iPhone backup file (any computer)
+
+The import page also reads the backup's message database (`sms.db`, stored in a backup as
 `3d0d7e5fb2ce288813306e4d4636395e047a3d28`) **in the browser**, with SQLite compiled to
 WebAssembly ([sql.js](ledger/static/ledger/vendor/sqljs/SOURCE), vendored; the page's CSP adds
 `'wasm-unsafe-eval'` for it and nothing else). The user picks a period (last month, last 3

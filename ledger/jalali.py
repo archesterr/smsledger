@@ -8,6 +8,9 @@ from zoneinfo import ZoneInfo
 TEHRAN = ZoneInfo("Asia/Tehran")
 MONTHS = ("فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
           "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند")
+# for terminals, which mostly can't show Persian (sync_client.py)
+MONTHS_LATIN = ("Farvardin", "Ordibehesht", "Khordad", "Tir", "Mordad", "Shahrivar",
+                "Mehr", "Aban", "Azar", "Dey", "Bahman", "Esfand")
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 _RE_DATE = re.compile(r"^\s*(1[34]\d{2})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{1,2})\s*$")
 

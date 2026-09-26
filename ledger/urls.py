@@ -14,6 +14,7 @@ urlpatterns = [
     path("manifest.webmanifest", api.manifest, name="manifest"),
     path("sw.js", api.service_worker, name="sw"),
     path("offline/", api.offline, name="offline"),
+    path("sync.py", api.sync_script, name="sync_script"),
     # app
     path("", app.home, name="home"),
     path("more/", app.more, name="more"),
@@ -41,6 +42,7 @@ urlpatterns = [
     path("accounts/<int:pk>/delete/", app.account_delete, name="account_delete"),
     path("import/", app.import_sms, name="import"),
     path("import/batch/", app.import_batch, name="import_batch"),
+    path("import/sync/", app.import_sync_key, name="import_sync"),
     path("messages/", app.messages_list, name="messages"),
     path("messages/<int:pk>/delete/", app.message_delete, name="message_delete"),
     path("messages/<int:pk>/share/", app.message_share, name="message_share"),

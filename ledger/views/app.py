@@ -1,7 +1,7 @@
 import csv
 import json
 from collections import Counter
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.core.exceptions import RequestDataTooBig
@@ -10,11 +10,12 @@ from django.db import transaction
 from django.db.models import RestrictedError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from .. import audit, charts, ingest, jalali, money, parsers, reports, rules, shortcut
+from .. import audit, charts, ingest, jalali, money, parsers, reports, rules, security, shortcut
 from ..forms import (
     AccountForm,
     CategoryForm,
@@ -26,7 +27,7 @@ from ..forms import (
     TxEditForm,
     user_categories,
 )
-from ..models import IN, OUT, Account, Budget, Category, Message, Rule, SupportSample, Transaction
+from ..models import IN, OUT, Account, Budget, Category, Device, Message, Rule, SupportSample, Transaction
 
 PAGE = 50
 
@@ -422,18 +423,21 @@ def account_delete(request, pk):
 
 # ---- import & unparsed messages --------------------------------------------------------
 def import_periods() -> list[dict]:
-    """The backup reader's choices, on Shamsi month boundaries. start: ms since epoch (JS time)."""
+    """The backup readers' choices, on Shamsi month boundaries. start: ms since epoch (JS time).
+    en: the same in English, for sync_client.py in a terminal."""
     jy, jm, _ = jalali.today()
 
-    def since(y, m, with_year=False):
-        label = f"از ۱ {jalali.MONTHS[m - 1]}" + (f" {y}" if with_year else "")
-        return {"hint": money.fa_digits(label), "start": int(jalali.day_start(y, m, 1).timestamp() * 1000)}
+    def since(label, en, y, m, with_year=False):
+        year = f" {y}" if with_year else ""
+        return {"label": label, "hint": money.fa_digits(f"از ۱ {jalali.MONTHS[m - 1]}{year}"),
+                "en": f"{en} (since 1 {jalali.MONTHS_LATIN[m - 1]}{year})",
+                "start": int(jalali.day_start(y, m, 1).timestamp() * 1000)}
 
     return [
-        {"key": "month", "label": "ماه گذشته", **since(*jalali.add_months(jy, jm, -1))},
-        {"key": "3months", "label": "سه ماه اخیر", **since(*jalali.add_months(jy, jm, -3))},
-        {"key": "year", "label": "یک سال اخیر", **since(jy - 1, jm, with_year=True)},
-        {"key": "all", "label": "همه", "hint": "کل تاریخچه", "start": 0},
+        {"key": "month", **since("ماه گذشته", "Last month", *jalali.add_months(jy, jm, -1))},
+        {"key": "3months", **since("سه ماه اخیر", "Last 3 months", *jalali.add_months(jy, jm, -3))},
+        {"key": "year", **since("یک سال اخیر", "Last year", jy - 1, jm, with_year=True)},
+        {"key": "all", "label": "همه", "hint": "کل تاریخچه", "en": "All", "start": 0},
     ]
 
 
@@ -445,14 +449,37 @@ def import_sms(request):
         res = ingest.ingest(request.user, texts, "paste")
         result = {k: sum(r["status"] == k for r in res) for k in ("created", "duplicate", "unparsed", "ignored")}
         form = ImportForm()
+    return import_page(request, form=form, result=result)
+
+
+def import_page(request, form=None, result=None, sync_command=None):
     return render(request, "ledger/import.html", {
-        "nav": "more", "form": form, "result": result, "periods": import_periods(),
-        "otp_pattern": shortcut.OTP_PATTERN,
+        "nav": "more", "form": form or ImportForm(), "result": result, "periods": import_periods(),
+        "otp_pattern": shortcut.OTP_PATTERN, "sync_command": sync_command,
     })
 
 
-BACKUP_BATCH = 500
-EARLIEST_SMS = datetime(2000, 1, 1, tzinfo=UTC)
+SYNC_KEY_HOURS = 24
+
+
+def sync_command(script_url: str, token: str) -> str:
+    """Only python3 is needed (curl isn't on every Ubuntu), and stdin stays the terminal for questions."""
+    return f"python3 -c \"import urllib.request as u; exec(u.urlopen('{script_url}').read())\" {token}"
+
+
+@require_POST
+def import_sync_key(request):
+    """The one-command sync (sync_client.py) for the user's computer. Its key can only add SMS,
+    works for a day, and the script revokes it when it's done. Shown in this response only: the
+    DB keeps just the hash."""
+    u = request.user
+    token, now = security.new_token(), timezone.now()
+    with transaction.atomic():
+        u.devices.live().filter(expires_at__isnull=False).update(revoked_at=now)  # one command at a time
+        Device.objects.create(user=u, name="رایانه · پیامک‌های قدیمی", token_hash=security.sha256(token),
+                              token_prefix=token[:8], expires_at=now + timedelta(hours=SYNC_KEY_HOURS))
+    audit.record(u, "sync_key", request)
+    return import_page(request, sync_command=sync_command(request.build_absolute_uri(reverse("sync_script")), token))
 
 
 @require_POST
@@ -461,24 +488,12 @@ def import_batch(request):
     {"items": [{"text": "...", "at": <ms since epoch>}]}. The backup itself never leaves the
     browser; "at" gives each SMS its real arrival time (the year, for banks that send none)."""
     try:
-        items = json.loads(request.body or b"{}").get("items")
+        batch = ingest.backup_items(json.loads(request.body or b"{}").get("items"))
     except (ValueError, AttributeError, RequestDataTooBig):
-        items = None
-    if not isinstance(items, list) or not 0 < len(items) <= BACKUP_BATCH or \
-            not all(isinstance(i, dict) for i in items):
+        batch = None
+    if batch is None:
         return JsonResponse({"error": "bad request"}, status=400)
-    latest = timezone.now() + timedelta(days=1)
-    texts, times = [], []
-    for item in items:
-        text, at = item.get("text"), item.get("at")
-        texts.append(text if isinstance(text, str) else "")
-        when = None
-        if isinstance(at, int | float) and not isinstance(at, bool):
-            try:
-                when = datetime.fromtimestamp(at / 1000, tz=UTC)
-            except (OverflowError, OSError, ValueError):
-                pass
-        times.append(when if when and EARLIEST_SMS <= when <= latest else None)
+    texts, times = batch
     results = ingest.ingest(request.user, texts, "backup", times=times)
     return JsonResponse({"count": dict(Counter(r["status"] for r in results))})
 

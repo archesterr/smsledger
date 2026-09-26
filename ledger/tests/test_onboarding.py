@@ -69,6 +69,7 @@ class TestImportPeriods(BaseTest):
         self.assertEqual(p["3months"]["hint"], "از ۱ تیر")
         self.assertEqual(p["year"]["hint"], "از ۱ مهر ۱۴۰۴")
         self.assertEqual(p["year"]["start"], ms(jalali.day_start(1404, 7, 1)))
+        self.assertEqual(p["year"]["en"], "Last year (since 1 Mehr 1404)")  # for the terminal
         self.assertEqual(p["all"]["start"], 0)
 
     def test_across_the_new_year(self):
