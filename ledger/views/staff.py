@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .. import audit, security
+from .. import audit, security, shortcut
 from ..models import Invite, Message, SupportSample, User
 
 
@@ -38,7 +38,7 @@ def staff_home(request):
     rows = [{"u": u, "unparsed": unparsed.get(u.pk, 0), "vault": u.vault_state,
              "silent": bool(u.n_devices and (u.last_seen is None or u.last_seen < silent_before))} for u in users]
     return render(request, "ledger/staff.html", {
-        "nav": "more", "rows": rows,
+        "nav": "more", "rows": rows, "shortcut_url": settings.SHORTCUT_URL, "shortcut_name": shortcut.NAME,
         "invites": Invite.objects.select_related("used_by").order_by("-created_at")[:30],
         "samples": SupportSample.objects.filter(resolved=False).select_related("user").order_by("-created_at"),
         "new_link": request.session.pop("new_invite_link", None),

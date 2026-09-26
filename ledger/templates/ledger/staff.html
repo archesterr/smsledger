@@ -28,6 +28,30 @@
 </table></div>
 {% endif %}
 
+<h2>میان‌بر آیفون برای همه</h2>
+<div class="card">
+{% if shortcut_url %}
+  <p>✅ لینک نصب فعال است؛ صفحه «راه‌اندازی آیفون» همه کاربران دکمه نصب یک‌لمسی دارد.</p>
+  <code class="token">{{ shortcut_url }}</code>
+{% else %}
+  <p><b>یک بار این کار را بکنید تا بقیه با یک لمس نصب کنند.</b> میان‌بر هیچ کلیدی در خودش ندارد (هر گوشی کلیدش را با دکمه «اتصال» می‌گیرد)، پس لینکش برای همه یکی است.</p>
+{% endif %}
+  <ol class="steps">
+    <li>میان‌بر «<bdi>{{ shortcut_name }}</bdi>» را روی آیفون خودتان داشته باشید:
+      <ul>
+        <li><b>با Mac:</b> <a href="{% url 'shortcut_file' %}">فایل میان‌بر</a> (آدرس همین سرور داخلش است) ← در Terminal:
+          <code class="token">shortcuts sign --mode anyone --input "{{ shortcut_name }}.shortcut" --output "{{ shortcut_name }} signed.shortcut"</code>
+          ← فایل امضاشده را باز کنید (یا با AirDrop به آیفون بفرستید) ← Add Shortcut.</li>
+        <li><b>بدون Mac:</b> طبق «ساختن دستی میان‌بر» در <a href="{% url 'setup' %}">راه‌اندازی آیفون</a> یک بار بسازید.</li>
+      </ul>
+      <div class="small muted">آیفون از iOS ۱۵ فقط فایل میان‌برِ امضاشده با Apple ID را قبول می‌کند و سرور لینوکسی نمی‌تواند امضا کند؛ برای همین یک بار باید از دست شما رد شود.</div></li>
+    <li>در Shortcuts روی میان‌بر نگه دارید ← <b>Share</b> ← <b>Copy iCloud Link</b>.</li>
+    <li>در فایل <code>.env</code> سرور بگذارید و سرویس را دوباره بالا بیاورید:
+      <code class="token">SHORTCUT_URL=https://www.icloud.com/shortcuts/…</code>
+      <code class="token">docker compose up -d</code></li>
+  </ol>
+</div>
+
 <h2>کاربران</h2>
 <div class="card table-wrap"><table>
   <thead><tr><th>کاربر</th><th>عضویت</th><th>دستگاه</th><th>آخرین پیامک</th><th class="n">خوانده‌نشده</th><th>رمزنگاری</th><th></th></tr></thead>

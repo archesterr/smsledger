@@ -8,22 +8,96 @@
 {% endif %}
 
 <div class="alert {% if connected %}info{% else %}warning{% endif %}"><span class="ico">{% if connected %}✅{% else %}⏳{% endif %}</span><div>
-  {% if connected %}<b>آیفون وصل است.</b>{% if has_sms %} پیامک‌ها می‌رسند.{% endif %}
-  {% else %}<b>هنوز پیامی از آیفون نرسیده.</b> مراحل زیر را انجام دهید؛ آخرش یک بار میان‌بر را دستی اجرا کنید و این صفحه را تازه کنید.{% endif %}
+  {% if connected %}<b>آیفون وصل است.</b>{% if has_sms %} پیامک‌ها می‌رسند.{% else %} با اولین پیامک بانک، تراکنش اینجا دیده می‌شود.{% endif %}
+  {% else %}<b>سه قدم:</b> نصب میان‌بر (یک لمس)، اتصال (یک لمس)، و ساختن اتوماسیون پیامک (دو دقیقه).{% endif %}
 </div></div>
 
-<h2>۱. کلید دستگاه</h2>
-{% if new_token %}
+{% if phone_qr %}
+<div class="card center">
+  <p><b>این مراحل را روی خود آیفون انجام دهید.</b> با دوربین آیفون این کد را اسکن کنید تا همین صفحه باز شود:</p>
+  <div class="qr" aria-label="QR">{{ phone_qr|safe }}</div>
+</div>
+{% endif %}
+
+<h2>۱. نصب میان‌بر</h2>
 <div class="card">
-  <p><b>کلید این دستگاه فقط همین یک بار نمایش داده می‌شود.</b> کپی کنید و در میان‌بر بگذارید. اگر گمش کردید، یک کلید تازه بسازید.</p>
-  <code class="token" id="token">Bearer {{ new_token }}</code>
-  <button class="btn secondary small" type="button" data-copy="token">کپی</button>
-  <p class="muted small">این کلید فقط می‌تواند پیامک <b>بفرستد</b>؛ با آن نمی‌شود هیچ اطلاعاتی را خواند. اگر میان‌بر را با کسی به اشتراک گذاشتید، کلید را باطل کنید.</p>
+{% if shortcut_url %}
+  <p>دکمه را بزنید؛ برنامه Shortcuts باز می‌شود. پایین صفحه <b>Add Shortcut</b> را بزنید.</p>
+  <a class="btn block" href="{{ shortcut_url }}">نصب میان‌بر «<bdi>{{ shortcut_name }}</bdi>»</a>
+  <p class="muted small">میان‌بر برای همه یکی است و هیچ کلید یا رمزی در خودش ندارد. اگر قبلاً میان‌بر را دستی ساخته‌اید، اول آن و «<bdi>Sync SMS Queue</bdi>» را پاک کنید.</p>
+{% else %}
+  <p>لینک نصب آماده هنوز روی این سرور گذاشته نشده. از مدیر سرور بخواهید (یک بار کار است و راهنمایش در صفحه مدیریت هست)، یا خودتان یک بار بسازید:</p>
+{% endif %}
+  <details class="guide"><summary>ساختن دستی میان‌بر</summary>
+  <p class="muted small">Shortcuts ← زبانه Shortcuts ← <b>+</b> ← اسم دقیقاً <b>{{ shortcut_name }}</b>. تنظیماتی مثل Method و Headers زیر <b>Show More</b> یا فلش <b>(›)</b> هر کار پنهان است.</p>
+  <div class="alert warning"><span class="ico">⚠️</span><div><b>Shortcut Input را تایپ نکنید.</b> روی جای خالی بزنید و از نوار بالای کیبورد
+    <b>Shortcut Input</b> را انتخاب کنید تا به شکل یک دکمه آبی دربیاید. <i>File</i>، <i>Matches</i> و بقیه هم همین‌طور.</div></div>
+
+  <p><b>الف) اتصال</b> (دکمه «اتصال این آیفون» میان‌بر را با کلید اجرا می‌کند)</p>
+  <ol class="steps">
+    <li><b>If</b> — <i>Shortcut Input</i> · <b>begins with</b> · <code>Bearer </code> (با یک فاصله بعدش)</li>
+    <li>داخل If: <b>Save File</b> — <i>Shortcut Input</i> · <b>Ask Where to Save</b> خاموش · Subpath:
+      <code class="num">smsledger/key.txt</code> · <b>Overwrite If File Exists</b> روشن</li>
+    <li><b>Get Contents of URL</b> — URL: <code class="token" id="url-connect">{{ ingest_url }}?source=connect</code>
+      <button class="btn secondary small" type="button" data-copy="url-connect">کپی</button>
+      Method: <b>POST</b> · Headers: <code>Authorization</code> = <i>Shortcut Input</i></li>
+    <li><b>Get Dictionary Value</b> — <code>message</code> از <i>Contents of URL</i> ← <b>Show Result</b> — <i>Dictionary Value</i>
+      ← <b>Stop This Shortcut</b></li>
+  </ol>
+
+  <p><b>ب) پیامک</b> (بعد از End If)</p>
+  <ol class="steps">
+    <li><b>Get File</b> — <b>Show Document Picker</b> خاموش · مسیر: <code class="num">smsledger/key.txt</code></li>
+    <li><b>If</b> — <i>Shortcut Input</i> · <b>has any value</b></li>
+    <li><b>Match Text</b> — الگو: <code class="token" id="otp-pattern">{{ otp_pattern }}</code>
+      <button class="btn secondary small" type="button" data-copy="otp-pattern">کپی الگو</button>
+      در <i>Shortcut Input</i> · Case Sensitive خاموش ← <b>If</b> <i>Matches</i> · has any value ← <b>Stop This Shortcut</b> ← End If
+      <div class="small muted">رمز پویا و کد تأیید هیچ‌وقت از گوشی خارج نمی‌شود.</div></li>
+    <li><b>Text</b> — یک خط خالی، بعد <i>Shortcut Input</i>، خط بعد <code>---</code> ←
+      <b>Append to Text File</b> — <i>Text</i> · مسیر: <code class="num">smsledger/queue.txt</code></li>
+    <li><b>Get Contents of URL</b> — URL: <code class="token" id="url-sms">{{ ingest_url }}?source=iphone</code>
+      <button class="btn secondary small" type="button" data-copy="url-sms">کپی</button>
+      <b>POST</b> · Headers: <code>Authorization</code> = <i>File</i> (کار ۱) · Request Body: <b>JSON</b>، یک فیلد <b>Text</b> به اسم <code>sms</code> = <i>Shortcut Input</i></li>
+  </ol>
+
+  <p><b>ج) صف</b> (داخل <b>Otherwise</b>؛ وقتی میان‌بر بدون ورودی اجرا شود)</p>
+  <ol class="steps">
+    <li><b>Get File</b> — Show Document Picker خاموش · <code class="num">smsledger/queue.txt</code> · <b>Error If Not Found</b> خاموش
+      ← <b>If</b> <i>File</i> (همین) · has any value</li>
+    <li><b>Get Contents of URL</b> — URL: <code class="token" id="url-queue">{{ ingest_url }}?split=1&amp;source=queue</code>
+      <button class="btn secondary small" type="button" data-copy="url-queue">کپی</button>
+      <b>POST</b> · Headers: <code>Authorization</code> = <i>File</i> (کلید، کار ۱ بخش ب) · Request Body: <b>File</b> = <i>File</i> (صف)</li>
+    <li><b>Get Dictionary Value</b> — <code>status</code> ← <b>If</b> <i>Dictionary Value</i> · has any value ← <b>Text</b> <code>---</code>
+      ← <b>Save File</b> — Ask Where to Save خاموش · <code class="num">smsledger/queue.txt</code> · Overwrite روشن</li>
+  </ol>
+  <p class="muted small">جواب خطای سرور هیچ‌وقت <code>status</code> ندارد، پس صف فقط بعد از ارسال موفق خالی می‌شود.</p>
+  <p class="muted small">Mac دارید؟ <a href="{% url 'shortcut_file' %}">فایل آماده میان‌بر</a> را بگیرید و در Terminal امضا کنید:
+    <code class="token">shortcuts sign --mode anyone --input "{{ shortcut_name }}.shortcut" --output "{{ shortcut_name }} signed.shortcut"</code>
+    فایل امضاشده را با AirDrop به آیفون بفرستید. (آیفون فقط فایل امضاشده را قبول می‌کند؛ قانون اپل.)</p>
+  </details>
+</div>
+
+<h2>۲. اتصال این آیفون</h2>
+{% if connect_url %}
+<div class="card" data-device-status="{% url 'device_status' new_device.pk %}" data-device-id="{{ new_device.pk }}">
+  <div class="js-waiting">
+    <p>حالا این دکمه را بزنید و <b>Open</b> را تأیید کنید. میان‌بر کلید این گوشی را ذخیره می‌کند و «✅ وصل شد» را نشان می‌دهد؛ بعد به اینجا برگردید.</p>
+    <a class="btn block" href="{{ connect_url }}">اتصال با Shortcuts</a>
+    <details class="table-view"><summary>دکمه کار نکرد؟</summary>
+      <p class="small">میان‌بر باید نصب شده باشد و اسمش دقیقاً <b>{{ shortcut_name }}</b> باشد. اگر میان‌بر قدیمی را دستی ساخته‌اید، مقدار هدر
+        <code>Authorization</code> آن را با این عوض کنید:</p>
+      <code class="token" id="token">Bearer {{ new_token }}</code>
+      <button class="btn secondary small" type="button" data-copy="token">کپی</button>
+    </details>
+  </div>
+  <div class="js-connected hidden"><p><b>✅ وصل شد.</b> قدم بعد: اتوماسیون پیامک (پایین‌تر).</p></div>
+  <p class="muted small">این کلید فقط همین یک بار ساخته و نشان داده می‌شود و فقط می‌تواند پیامک <b>بفرستد</b>؛ با آن نمی‌شود چیزی خواند.</p>
 </div>
 {% else %}
 <form method="post" class="card" novalidate>{% csrf_token %}
-  {% include "ledger/_field.html" with f=form.name %}
-  <button class="btn" type="submit">ساخت کلید</button>
+  <p>برای این گوشی یک کلید تازه می‌سازد و با یک لمس داخل میان‌بر می‌گذارد.</p>
+  <button class="btn block" type="submit">اتصال این آیفون</button>
+  <p class="muted small">کلید فقط می‌تواند پیامک بفرستد؛ با آن نمی‌شود چیزی خواند. کلیدهایی که ساخته شده‌اند ولی هیچ‌وقت استفاده نشده‌اند، باطل می‌شوند.</p>
 </form>
 {% endif %}
 
@@ -31,53 +105,21 @@
 <div class="card flush"><ul class="list">{% for d in devices %}
   <li><div class="item"><span class="ico">📱</span>
     <span class="main"><span class="t1">{{ d.name }} <span class="muted mono small">{{ d.token_prefix }}…</span></span>
-      <span class="t2">آخرین ارسال: {{ d.last_used_at|ago }}</span></span>
+      <span class="t2" id="device-{{ d.pk }}-seen">{% if d.last_used_at %}آخرین ارسال: {{ d.last_used_at|ago }}{% else %}هنوز وصل نشده{% endif %}</span></span>
     <form method="post" action="{% url 'device_revoke' d.pk %}" data-confirm="دسترسی این دستگاه قطع شود؟">{% csrf_token %}
       <button class="btn ghost small" type="submit">باطل کردن</button></form>
   </div></li>{% endfor %}
 </ul></div>
 {% endif %}
 
-<h2>۲. مخاطب بانک</h2>
+<h2>۳. مخاطب بانک</h2>
 <div class="card"><p>یک پیامک بانک را باز کنید، روی فرستنده بزنید و <b>Create New Contact</b> را بزنید؛ اسمش را بگذارید مثلاً <b>Blu</b>.
-  برای هر بانک دیگر هم همین کار را بکنید. اتوماسیون آیفون فقط با مخاطب کار می‌کند.</p>
+  برای هر بانک دیگر هم همین کار را بکنید. اتوماسیون آیفون فرستنده را فقط از مخاطب‌ها انتخاب می‌کند.</p>
   <p class="muted small">بانک‌های پشتیبانی‌شده: بلو، سامان، خاورمیانه، پاسارگاد، ملی. پیامک بانک‌های دیگر هم ذخیره می‌شود و بعد از اضافه شدن الگوی آن بانک، خودکار خوانده می‌شود.</p></div>
 
-<h2>۳. میان‌بر «SMS to Ledger»</h2>
+<h2>۴. اتوماسیون پیامک</h2>
 <div class="card">
-{% if shortcut_url %}
-  <p>میان‌بر آماده را اضافه کنید؛ هنگام نصب، آدرس و کلید را از شما می‌پرسد:</p>
-  <p><a class="btn" href="{{ shortcut_url }}">افزودن میان‌بر آماده</a></p>
-  <p class="muted small">آدرس: <code class="num">{{ ingest_url }}</code></p>
-  <details class="table-view"><summary>یا دستی بسازید</summary>
-{% endif %}
-  <p class="muted small">برنامه <b>Shortcuts</b> ← زبانه Shortcuts ← دکمه <b>+</b> ← اسم: <b>SMS to Ledger</b>. این کارها را به ترتیب اضافه کنید:</p>
-  <p class="muted small">تنظیماتی مثل Method، Headers، Case Sensitive و Make New Line زیر <b>Show More</b> یا فلش <b>(›)</b> کنار هر کار پنهان است؛ اول آن را بزنید.</p>
-  <div class="alert warning"><span class="ico">⚠️</span><div><b>Shortcut Input را تایپ نکنید.</b> روی جای خالی بزنید، و از نوار بالای کیبورد
-    <b>Shortcut Input</b> را انتخاب کنید تا به شکل یک دکمه آبی دربیاید. اگر تایپش کنید، به جای پیامک خود کلمه «Shortcut Input» فرستاده می‌شود.</div></div>
-  <ol class="steps">
-    <li><b>Match Text</b> — متن: <i>Shortcut Input</i> · الگو (Pattern):
-      <code class="token" id="otp-pattern">رمز(?!\s*ارز)|یک.?بار|کد.?(تایید|تأیید|ورود|فعال|پویا)|OTP</code>
-      <button class="btn secondary small" type="button" data-copy="otp-pattern">کپی الگو</button>
-      <div class="small muted">Case Sensitive را خاموش کنید. این مرحله نمی‌گذارد رمز پویا و کد تأیید از گوشی خارج شود.</div></li>
-    <li><b>If</b> — <i>Matches</i> · <b>has any value</b> ← داخلش: <b>Stop This Shortcut</b> ← <b>End If</b>.</li>
-    <li><b>Text</b> — اول <i>Shortcut Input</i>، خط بعد فقط <code>---</code></li>
-    <li><b>Append to Text File</b> — متن: <i>Text</i> · مسیر فایل: <code class="num">smsledger/queue.txt</code> · <b>Make New Line</b> روشن.
-      <div class="small muted">اگر اینترنت نباشد، پیامک اینجا می‌ماند و شبانه ارسال می‌شود.</div></li>
-    <li><b>Get Contents of URL</b>
-      <ul>
-        <li>URL: <code class="token" id="url1">{{ ingest_url }}?source=iphone</code> <button class="btn secondary small" type="button" data-copy="url1">کپی</button></li>
-        <li>Method: <b>POST</b></li>
-        <li>Headers: کلید <code>Authorization</code> · مقدار: کلید دستگاه (با <code>Bearer</code> اولش)</li>
-        <li>Request Body: <b>JSON</b> · یک فیلد <b>Text</b> به اسم <code>sms</code> با مقدار <i>Shortcut Input</i></li>
-      </ul></li>
-  </ol>
-{% if shortcut_url %}</details>{% endif %}
-</div>
-
-<h2>۴. اتوماسیون (برای هر پیامک)</h2>
-<div class="card">
-  <p>دو اتوماسیون لازم است، هر کدام با یک کلمه (کلمه موجودی حساب در پیامک آن بانک؛ پیامک‌های تبلیغاتی بانک را کنار می‌گذارد):</p>
+  <p>اپل اجازه نمی‌دهد اتوماسیون نصب یا فرستاده شود؛ این تنها قدمی است که باید دستی بسازید. یک اتوماسیون برای هر کلمه (کلمه موجودی حساب در پیامک آن بانک؛ پیامک‌های تبلیغاتی را کنار می‌گذارد):</p>
   <ul>
     <li>بلو: <b>«موجودی»</b></li>
     <li>سامان، خاورمیانه، پاسارگاد، ملی (همه با هم در یک اتوماسیون): <b>«مانده»</b></li>
@@ -90,13 +132,12 @@
     <li>Shortcuts ← زبانه <b>Automation</b> ← <b>+</b> ← <b>Message</b>.</li>
     <li><b>Sender</b>: مخاطب بانک (چند بانک را می‌شود با هم انتخاب کرد) · <b>Message Contains</b>: کلمه بالا.</li>
     <li><b>Run Immediately</b> را انتخاب و <b>Notify When Run</b> را خاموش کنید ← <b>Next</b>.</li>
-    <li><b>New Blank Automation</b> ← کار <b>Run Shortcut</b> ← «SMS to Ledger» ← روی فلش بزنید و <b>Input</b> را <i>Shortcut Input</i> بگذارید ← <b>Done</b>.</li>
+    <li><b>New Blank Automation</b> ← کار <b>Run Shortcut</b> ← «<bdi>{{ shortcut_name }}</bdi>» ← روی فلش بزنید و <b>Input</b> را <i>Shortcut Input</i> بگذارید ← <b>Done</b>.</li>
   </ol>
   <p class="muted small">نتیجه: با هر پیامک، کاملاً خودکار و بی‌صدا.</p>
   </details>
 
   <details class="guide"{% if ios and ios < 17 %} open{% endif %}><summary>iOS ۱۶ (و ۱۴، ۱۵)</summary>
-  <p class="muted small">در iOS ۱۶ دکمه «New Blank Automation» و گزینه «Run Immediately» وجود ندارد؛ این مراحل را بروید:</p>
   <ol class="steps">
     <li>Shortcuts ← زبانه <b>Automation</b> (پایین صفحه) ← <b>Create Personal Automation</b>.
       <div class="small muted">اگر قبلاً اتوماسیون ساخته‌اید، اول دکمه <b>+</b> بالای صفحه.</div></li>
@@ -105,7 +146,7 @@
       <b>Sender</b> ← <b>Choose</b> ← مخاطب بانک‌ها را انتخاب کنید ← Done.<br>
       بالا سمت راست: <b>Next</b>.</li>
     <li><b>Add Action</b> ← در جستجو بنویسید <b>Run Shortcut</b> ← انتخابش کنید.</li>
-    <li>در کار Run Shortcut روی کلمه کم‌رنگ <b>Shortcut</b> بزنید ← «SMS to Ledger».
+    <li>در کار Run Shortcut روی کلمه کم‌رنگ <b>Shortcut</b> بزنید ← «<bdi>{{ shortcut_name }}</bdi>».
       بعد روی فلش <b>(›)</b> کنار کار بزنید تا <b>Input</b> دیده شود ← <b>Input</b> ← <i>Shortcut Input</i>.</li>
     <li>بالا سمت راست: <b>Next</b> ← اگر <b>Ask Before Running</b> هست، خاموشش کنید و در پیام بعد <b>Don't Ask</b> را بزنید ← <b>Done</b>.</li>
     <li>برای کلمه دوم (<b>«مانده»</b>) همین مراحل را دوباره بروید.</li>
@@ -115,34 +156,18 @@
   <p class="muted small">اسم دکمه‌ها ممکن است بین نسخه‌های فرعی کمی فرق کند؛ اگر چیزی را پیدا نکردید، دنبال همان کلمه در صفحه بگردید.</p>
   </details>
 
-  <p class="muted small"><b>آزمایش با یک پیامک واقعی:</b> جزئیات میان‌بر (ⓘ) ← <b>Show in Share Sheet</b> را روشن کنید؛ بالای میان‌بر خط
-    <b>If there's no input</b> ظاهر می‌شود ← آن را <b>Get Clipboard</b> بگذارید. حالا یک پیامک بانک را کپی کنید (نگه دارید ← Copy)
-    و میان‌بر را دستی اجرا کنید، بعد <a href="{% url 'home' %}">صفحه خانه</a> را ببینید. با همین روش پیامک‌های قدیمی را هم می‌شود یکی‌یکی فرستاد.</p>
   <p class="muted small">اگر لمسی جا بماند، صفحه «خانه» جای خالی را از روی موجودی پیدا می‌کند و خبر می‌دهد؛ پیامک را از <a href="{% url 'import' %}">وارد کردن پیامک</a> اضافه کنید.</p>
 </div>
 
-<h2>۵. ارسال شبانه صف (پشتیبان)</h2>
+<h2>۵. ارسال شبانه (پیشنهادی)</h2>
 <div class="card">
-  <p class="muted small">اگر موقع رسیدن پیامک اینترنت نبود، این میان‌بر هر شب صف را می‌فرستد و بعد پاکش می‌کند. میان‌بر جدید به اسم <b>Sync SMS Queue</b>:</p>
-  <ol class="steps">
-    <li><b>Get File</b> — از پوشه Shortcuts، مسیر <code class="num">smsledger/queue.txt</code> · <b>Error If Not Found</b> خاموش.</li>
-    <li><b>If</b> — <i>File</i> · <b>has any value</b>:
-      <ul>
-        <li><b>Get Contents of URL</b> — URL: <code class="token" id="url2">{{ ingest_url }}?split=1&amp;source=queue</code>
-          <button class="btn secondary small" type="button" data-copy="url2">کپی</button>
-          Method: <b>POST</b> · همان هدر <code>Authorization</code> · Request Body: <b>File</b> ← <i>File</i></li>
-        <li><b>Get Dictionary Value</b> — کلید <code>status</code> از <i>Contents of URL</i></li>
-        <li><b>If</b> — <i>Dictionary Value</i> · <b>has any value</b> ← <b>Delete Files</b> ← <i>File</i> (Confirm Before Deleting خاموش) ← <b>End If</b></li>
-      </ul></li>
-    <li><b>End If</b>.</li>
-  </ol>
-  <p>اتوماسیون شبانه:</p>
+  <p>میان‌بر هر پیامک را اول در صف گوشی نگه می‌دارد. اگر موقع رسیدن پیامک اینترنت نبود، این اتوماسیون هر شب صف را می‌فرستد. هر وقت هم خودتان میان‌بر را اجرا کنید، همین کار را می‌کند.</p>
   <ul>
-    <li><b>iOS ۱۷+:</b> Automation ← <b>+</b> ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← <b>Run Immediately</b> ← Next ← <b>New Blank Automation</b> ← Run Shortcut «Sync SMS Queue».</li>
-    <li><b>iOS ۱۶:</b> Automation ← <b>Create Personal Automation</b> (یا +) ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← Next ← <b>Add Action</b> ← Run Shortcut «Sync SMS Queue» ← Next ← <b>Ask Before Running</b> خاموش ← <b>Don't Ask</b> ← Done.
+    <li><b>iOS ۱۷+:</b> Automation ← <b>+</b> ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← <b>Run Immediately</b> ← Next ← <b>New Blank Automation</b> ← Run Shortcut «<bdi>{{ shortcut_name }}</bdi>».</li>
+    <li><b>iOS ۱۶:</b> Automation ← <b>Create Personal Automation</b> (یا +) ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← Next ← <b>Add Action</b> ← Run Shortcut «<bdi>{{ shortcut_name }}</bdi>» ← Next ← <b>Ask Before Running</b> خاموش ← <b>Don't Ask</b> ← Done.
       <div class="small muted">اتوماسیون ساعت‌دار در iOS ۱۶ بدون لمس اجرا می‌شود.</div></li>
   </ul>
-  <p class="muted small">فقط وقتی سرور جواب درست بدهد صف پاک می‌شود؛ خطا یا نبود اینترنت صف را نگه می‌دارد. ارسال تکراری هم مشکلی ندارد.</p>
+  <p class="muted small">ارسال تکراری مشکلی ندارد؛ سرور تکراری‌ها را کنار می‌گذارد.</p>
 </div>
 
 <h2>۶. پیامک‌های قدیمی</h2>

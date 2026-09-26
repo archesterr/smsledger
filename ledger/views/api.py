@@ -30,9 +30,23 @@ def device_from_request(request) -> Device | None:
             .filter(token_hash=security.sha256(token), revoked_at__isnull=True, user__is_active=True).first())
 
 
+# shown on the phone by the Shortcut's Connect step ("message" from the reply)
+MESSAGES = {
+    401: "❌ این کلید معتبر نیست یا باطل شده.\nدر صفحه «راه‌اندازی آیفون» دوباره «اتصال این آیفون» را بزنید.",
+    429: "⏳ درخواست‌ها زیاد بود؛ چند دقیقه بعد دوباره امتحان کنید.",
+}
+
+
 def _error(msg: str, status: int) -> JsonResponse:
-    # Error bodies never contain a "status" key: the Shortcut deletes its queue only when it sees one.
-    return JsonResponse({"error": msg}, status=status)
+    # Error bodies never contain a "status" key: the Shortcut empties its queue only when it sees one.
+    body = {"error": msg}
+    if status in MESSAGES:
+        body["message"] = MESSAGES[status]
+    return JsonResponse(body, status=status, json_dumps_params={"ensure_ascii": False})
+
+
+def _touch(device: Device, ip: str) -> None:
+    Device.objects.filter(pk=device.pk).update(last_used_at=timezone.now(), last_ip=audit.ip_prefix(ip))
 
 
 @csrf_exempt
@@ -41,6 +55,7 @@ def _error(msg: str, status: int) -> JsonResponse:
 def ingest_view(request):
     """POST /ingest   Authorization: Bearer sml_...
     Body: JSON {"sms": "..." | [...], "source": "..."}, or text/plain (?split=1 splits on '---' lines).
+    ?source=connect is the Shortcut's hello after the setup page's Connect button: no body.
     The device token can only add SMS. It can't read anything back."""
     ip = security.client_ip(request)
     if security.INGEST_BAD.blocked(ip):
@@ -51,12 +66,19 @@ def ingest_view(request):
         return _error("unauthorized", 401)
     if security.INGEST_DEVICE.hit(device.pk) > security.INGEST_DEVICE.limit:
         return _error("rate limited", 429)
+    source = request.GET.get("source", "shortcut")
+    if source == "connect":
+        # the setup page's Connect button ran the Shortcut, which just saved this key
+        _touch(device, ip)
+        return JsonResponse({"status": "connected", "message": (
+            f"✅ این آیفون به حساب «{device.user.username}» وصل شد.\n"
+            "به صفحه راه‌اندازی برگردید و اتوماسیون پیامک را بسازید.")},
+            json_dumps_params={"ensure_ascii": False})
     try:
         body = request.body.decode("utf-8", "replace")
     except RequestDataTooBig:
         return _error("body too large", 413)
 
-    source = request.GET.get("source", "shortcut")
     if "json" in request.content_type:
         try:
             data = json.loads(body or "{}")
@@ -74,7 +96,7 @@ def ingest_view(request):
     texts = [x if isinstance(x, str) else "" for x in items]
 
     results = ingest.ingest(device.user, texts, source, device)
-    Device.objects.filter(pk=device.pk).update(last_used_at=timezone.now(), last_ip=audit.ip_prefix(ip))
+    _touch(device, ip)
     if len(results) == 1:
         return JsonResponse(results[0], json_dumps_params={"ensure_ascii": False})
     counts = Counter(r["status"] for r in results)

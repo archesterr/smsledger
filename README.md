@@ -15,7 +15,7 @@ iPhone (each user)                                  Server (docker compose)
  Message automation (bank sender, "موجودی"/"مانده")
   └─ Shortcut "SMS to Ledger"
        1. drop OTP / login-code SMS on the phone
-       2. append SMS to iCloud queue file ───── offline? sent by the nightly "Sync" shortcut
+       2. append SMS to iCloud queue file ───── offline? sent by the nightly run of the same shortcut
        3. POST /ingest  (device token) ───────► Caddy (HTTPS) ─► Django app ─► PostgreSQL
                                                   ├─ drop OTP again, never store it
                                                   ├─ per-user sha256 dedupe (resending is safe)
@@ -158,34 +158,56 @@ If PyPI is unreachable during the build, set
 ## iPhone setup (each user)
 
 Everything is explained in Persian inside the app, with the user's own server URL filled in:
-**بیشتر → راه‌اندازی آیفون**. In short:
+**بیشتر → راه‌اندازی آیفون**. Once the admin has published the shortcut (below), each person does:
 
-1. **Device key**: create one on the setup page (shown once).
-2. **Contact**: save the bank's SMS sender as a contact (e.g. `Blu`).
-3. **Shortcut "SMS to Ledger"**:
-   - **Match Text** on *Shortcut Input* with pattern
-     `رمز(?!\s*ارز)|یک.?بار|کد.?(تایید|تأیید|ورود|فعال|پویا)|OTP` → **If** *Matches* has any
-     value → **Stop This Shortcut**
-   - **Text**: *Shortcut Input* + a line `---` → **Append to Text File** `smsledger/queue.txt`
-   - **Get Contents of URL**: `POST https://tx.yourdomain.ir/ingest?source=iphone`,
-     header `Authorization: Bearer <device key>`, JSON body `{"sms": Shortcut Input}`
-4. **Automation**: Message → sender = bank contact(s), contains the bank's balance word →
-   Run Shortcut (iOS 17+: *Run Immediately*, *Notify When Run* off). One automation per word:
-   `موجودی` for Blu, `مانده` for Saman, Middle East Bank, Pasargad and Melli.
-   **iOS 16** has no *New Blank Automation* / *Run Immediately*: Automation → **Create Personal
-   Automation** → Message → *Message Contains* / *Sender* → Next → **Add Action** → Run Shortcut
-   (expand it to set *Input* = Shortcut Input) → Next → turn off *Ask Before Running* → Done.
-   Each SMS then shows a notification to tap. The setup page opens the guide for the
-   phone's iOS version (from Safari's User-Agent).
-5. **Shortcut "Sync SMS Queue"** + a daily 03:00 automation: posts `queue.txt` to
-   `/ingest?split=1&source=queue` and deletes the file only if the response has a `status` key
-   (errors never contain one, so a failed sync keeps the queue).
-6. **Old SMS**: copy them from Messages and paste into **وارد کردن پیامک**. Duplicates are ignored.
+1. **Install**: one tap on the iCloud link → *Add Shortcut*.
+2. **Connect**: one tap on *اتصال این آیفون*. The server makes a device key and opens
+   `shortcuts://run-shortcut?name=SMS%20to%20Ledger&input=text&text=Bearer%20<key>`; the shortcut
+   saves the key to `Shortcuts/smsledger/key.txt`, says hello to `/ingest?source=connect` and shows
+   the server's reply. The setup page turns green by itself when the hello arrives. Keys that were
+   made but never used are revoked on the next tap.
+3. **Bank contacts** and the **Message automation** (Apple doesn't let automations be shared):
+   sender = bank contact(s), contains the bank's balance word → Run Shortcut *SMS to Ledger* with
+   *Shortcut Input*. One automation per word: `موجودی` for Blu, `مانده` for Saman, Middle East
+   Bank, Pasargad and Melli. iOS 17+: *Run Immediately*, *Notify When Run* off. **iOS 16** has no
+   *New Blank Automation* / *Run Immediately*: Automation → **Create Personal Automation** → Message
+   → *Message Contains* / *Sender* → Next → **Add Action** → Run Shortcut (expand it to set *Input*
+   = Shortcut Input) → Next → turn off *Ask Before Running* → Done. Each SMS then shows a
+   notification to tap. The setup page opens the guide for the phone's iOS version.
+4. **Nightly automation** (recommended): Time of Day 03:00 → Run Shortcut *SMS to Ledger*, no input.
+5. **Old SMS**: copy them from Messages and paste into **وارد کردن پیامک**. Duplicates are ignored.
 
-To save your friends the typing, build the shortcut once, share it as an iCloud link with
-*Import Questions* for the URL and the key, and set `SHORTCUT_URL` in `.env`: the setup page
-then shows an "add shortcut" button. (The Message automation can't be shared; each person
-creates it.)
+### The shortcut
+
+[`ledger/shortcut.py`](ledger/shortcut.py) generates it (download: `/setup/shortcut/`). It holds
+**no key**, so one copy serves everyone. What it does depends on its input:
+
+| Input | From | Does |
+|---|---|---|
+| `Bearer sml_…` | the Connect button | save the key, `POST /ingest?source=connect`, show the reply |
+| an SMS | Message automation | drop OTP / login codes on the phone (regex), append to `smsledger/queue.txt`, `POST /ingest?source=iphone` |
+| nothing | nightly automation, or a manual run | `POST` the queue to `/ingest?split=1&source=queue`; empty it only if the reply has a `status` key (errors never do) |
+
+The queue is written before the request, so an SMS that arrives with no internet is sent by the
+next nightly run. Resending is harmless (per-user dedupe). The tests run the generated file
+through a small interpreter against `/ingest` (connect, SMS, OTP, offline, failed sync).
+
+### Publishing it once (admin)
+
+Since iOS 15 an iPhone only imports shortcut **files** signed with an Apple ID, and only a Mac or
+an iPhone can sign one, so the server can't hand out a ready file. Do this once:
+
+1. Get *SMS to Ledger* onto your iPhone, either
+   - **with a Mac**: download it from the staff page (it has your server's address in it), then
+     `shortcuts sign --mode anyone --input "SMS to Ledger.shortcut" --output "SMS to Ledger signed.shortcut"`,
+     and open the signed file (or AirDrop it to the iPhone) → *Add Shortcut*; or
+   - **without a Mac**: build it by hand once from *ساختن دستی میان‌بر* on the setup page.
+2. Shortcuts → long-press it → **Share** → **Copy iCloud Link**.
+3. Set `SHORTCUT_URL=<that link>` in `.env` and `docker compose up -d`. Every setup page now has
+   the one-tap install button.
+
+A hand-built shortcut from before this version (key in its own header, plus *Sync SMS Queue*)
+keeps working; to move to the new one, delete both and follow steps 1–2 above.
 
 ---
 

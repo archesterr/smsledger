@@ -45,6 +45,28 @@
     s.addRange(r);
   }
 
+  // Setup: after "Connect" hands the key to the Shortcut, show when it has reached the server.
+  // Checked while the page is visible, and right away on coming back from the Shortcuts app.
+  var statusBox = document.querySelector("[data-device-status]");
+  if (statusBox && window.fetch) {
+    var tries = 0, timer = null;
+    var check = function () {
+      if (document.hidden || tries++ > 200) return;
+      fetch(statusBox.dataset.deviceStatus, { credentials: "same-origin", headers: { "Accept": "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (res) {
+          if (!res || !res.connected) return;
+          clearInterval(timer);
+          statusBox.querySelector(".js-waiting").classList.add("hidden");
+          statusBox.querySelector(".js-connected").classList.remove("hidden");
+          var seen = document.getElementById("device-" + statusBox.dataset.deviceId + "-seen");
+          if (seen) seen.textContent = "وصل شد، همین الان";
+        }).catch(function () {});
+    };
+    timer = setInterval(check, 3000);
+    document.addEventListener("visibilitychange", check);
+  }
+
   // Inbox: categorize with one tap, no page reload.
   // (e.submitter only exists on iOS 15.4+, so remember the tapped chip ourselves.)
   document.addEventListener("click", function (e) {
