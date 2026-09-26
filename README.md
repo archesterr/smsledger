@@ -139,6 +139,12 @@ docker compose exec app python manage.py createsuperuser
 docker compose exec app python manage.py invite --note "Ali"   # or use the staff page
 ```
 
+On the staff page, **ساخت لینک دعوت** gives a ready-to-send Persian message (greeting, what the
+app does, the link, when it expires) with a copy button. The link opens a single page that is both
+the welcome guide (what it does, privacy, the six steps) and the signup form; after signup the
+user is taken through the recovery key and then the iPhone setup page. Opened on a computer, it
+shows a QR code to carry on on the phone.
+
 ### Iran servers: Docker Hub and PyPI
 
 Docker Hub refuses Iranian IPs. Add a registry mirror to the Docker daemon; it covers
@@ -175,7 +181,33 @@ Everything is explained in Persian inside the app, with the user's own server UR
    = Shortcut Input) → Next → turn off *Ask Before Running* → Done. Each SMS then shows a
    notification to tap. The setup page opens the guide for the phone's iOS version.
 4. **Nightly automation** (recommended): Time of Day 03:00 → Run Shortcut *SMS to Ledger*, no input.
-5. **Old SMS**: copy them from Messages and paste into **وارد کردن پیامک**. Duplicates are ignored.
+5. **Old SMS** (**وارد کردن پیامک**): iOS lets nothing read existing SMS, so history comes from an
+   iPhone backup, or by pasting. Duplicates are always ignored.
+
+### Old SMS from an iPhone backup
+
+The import page reads the backup's message database (`sms.db`, stored in a backup as
+`3d0d7e5fb2ce288813306e4d4636395e047a3d28`) **in the browser**, with SQLite compiled to
+WebAssembly ([sql.js](ledger/static/ledger/vendor/sqljs/SOURCE), vendored; the page's CSP adds
+`'wasm-unsafe-eval'` for it and nothing else). The user picks a period (last month, last 3
+months, last year, all; on Shamsi month boundaries) and the senders; only those bank SMS are
+posted to `/import/batch/` with their arrival time, so the year of a Melli SMS is right and
+personal messages never leave the computer. It keeps what the Message automation would send:
+SMS (not iMessage) containing «موجودی» or «مانده», never OTPs; Iranian mobile numbers start
+unticked. iOS 16 texts that exist only in `attributedBody` are decoded too.
+
+Getting the file (the page explains it in Persian):
+
+```bash
+sudo apt install libimobiledevice-utils
+idevicepair pair                                  # then "Trust" on the iPhone
+idevicebackup2 backup --full ~/iphone-backup      # needs as much space as the phone uses
+find ~/iphone-backup -name 3d0d7e5fb2ce288813306e4d4636395e047a3d28
+```
+
+On Windows it's an Apple Devices/iTunes backup in `%USERPROFILE%\Apple\MobileSync\Backup`; on
+a Mac a Finder backup, or `~/Library/Messages/chat.db` with Messages in iCloud. Encrypted
+backups can't be read (`idevicebackup2 -i encryption off`).
 
 ### The shortcut
 

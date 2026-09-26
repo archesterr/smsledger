@@ -1,6 +1,7 @@
 import time
 from urllib.parse import urlencode
 
+import segno
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_not_required
@@ -14,6 +15,7 @@ from django.views.decorators.http import require_POST
 from .. import audit, security, vault
 from ..forms import CodeForm, LoginForm, SignupForm
 from ..models import Invite, RecoveryCode, User
+from .me import RE_IOS
 
 PENDING_TTL = 300  # seconds between password and 2FA code
 BACKEND = "django.contrib.auth.backends.ModelBackend"
@@ -169,4 +171,11 @@ def join(request, code):
             vault.start_session(request, user, vault.key_for(user.pk))
             finish_login(request, user)
             return redirect("setup")  # after the recovery key page (middleware)
-    return render(request, "ledger/auth/join.html", {"form": form, "invite": invite})
+    on_iphone = bool(RE_IOS.search(request.headers.get("User-Agent", "")))
+    return render(request, "ledger/auth/join.html", {
+        "form": form, "invite": invite, "on_iphone": on_iphone,
+        "inviter": invite.created_by.username if invite.created_by else "",
+        # opened on a computer: the same link as a QR, to carry on on the iPhone
+        "qr": None if on_iphone else segno.make(request.build_absolute_uri(), error="m").svg_inline(
+            scale=5, omitsize=True, dark="#111", light="#fff", border=2),
+    })

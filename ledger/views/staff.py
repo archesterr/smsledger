@@ -8,10 +8,11 @@ from django.contrib import messages
 from django.db.models import Count, Max, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .. import audit, security, shortcut
+from .. import audit, jalali, money, security, shortcut
 from ..models import Invite, Message, SupportSample, User
 
 
@@ -37,11 +38,14 @@ def staff_home(request):
     silent_before = timezone.now() - timedelta(days=settings.SILENT_DAYS)
     rows = [{"u": u, "unparsed": unparsed.get(u.pk, 0), "vault": u.vault_state,
              "silent": bool(u.n_devices and (u.last_seen is None or u.last_seen < silent_before))} for u in users]
+    new = request.session.pop("new_invite", None)
+    inv = new and Invite.objects.filter(pk=new["pk"]).first()
     return render(request, "ledger/staff.html", {
+        "new_link": new and new["link"], "invite_message": inv and invite_message(request, new["link"], inv),
+        "invite_days": settings.INVITE_DAYS,
         "nav": "more", "rows": rows, "shortcut_url": settings.SHORTCUT_URL, "shortcut_name": shortcut.NAME,
         "invites": Invite.objects.select_related("used_by").order_by("-created_at")[:30],
         "samples": SupportSample.objects.filter(resolved=False).select_related("user").order_by("-created_at"),
-        "new_link": request.session.pop("new_invite_link", None),
     })
 
 
@@ -49,12 +53,21 @@ def staff_home(request):
 @require_POST
 def invite_create(request):
     code = security.new_invite_code()
-    Invite.objects.create(code_hash=security.sha256(code), note=request.POST.get("note", "")[:100],
-                          created_by=request.user,
-                          expires_at=timezone.now() + timedelta(days=settings.INVITE_DAYS))
+    inv = Invite.objects.create(code_hash=security.sha256(code), note=request.POST.get("note", "").strip()[:100],
+                                created_by=request.user,
+                                expires_at=timezone.now() + timedelta(days=settings.INVITE_DAYS))
     # shown once on the next page load; only the hash stays in the invite table
-    request.session["new_invite_link"] = request.build_absolute_uri(f"/join/{code}/")
+    request.session["new_invite"] = {"link": request.build_absolute_uri(f"/join/{code}/"), "pk": inv.pk}
     return redirect("staff")
+
+
+def invite_message(request, link: str, inv: Invite) -> str:
+    """The text the admin pastes into Telegram/WhatsApp: the link opens the welcome guide."""
+    _, jm, jd = jalali.of(inv.expires_at)
+    return render_to_string("ledger/invite_message.txt", {
+        "link": link, "note": inv.note, "site_name": settings.SITE_NAME,
+        "expires": money.fa_digits(f"{jd} {jalali.MONTHS[jm - 1]}"),
+    }, request).strip()
 
 
 @staff_required

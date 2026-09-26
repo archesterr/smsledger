@@ -1,4 +1,4 @@
-{% extends "ledger/base.html" %}{% load ledger %}
+{% extends "ledger/base.html" %}{% load ledger static %}
 {% block title %}وارد کردن پیامک{% endblock %}
 {% block heading %}وارد کردن پیامک{% endblock %}
 {% block content %}
@@ -10,14 +10,78 @@
   {% if result.unparsed %}<a href="{% url 'messages' %}">پیامک‌های خوانده‌نشده</a>{% endif %}
 </div></div>
 {% endif %}
+
+<p class="muted small">آیفون به هیچ برنامه یا میان‌بری اجازه نمی‌دهد پیامک‌های قبلی را بخواند؛ فقط پیامک‌های تازه خودکار می‌رسند.
+  برای تاریخچه دو راه هست. پیامک تکراری هیچ‌وقت دوباره ثبت نمی‌شود، پس هر چند بار خواستید امتحان کنید.</p>
+
+<h2>از پشتیبان آیفون (همه با هم)</h2>
+<div class="card" id="backup" data-wasm="{% static 'ledger/vendor/sqljs/sql-wasm-browser.wasm' %}"
+     data-url="{% url 'import_batch' %}" data-otp="{{ otp_pattern }}">
+  <p>روی کامپیوتر از آیفون پشتیبان بگیرید و فایل پیامک‌های آن را اینجا بدهید.
+    <b>فایل همین‌جا در مرورگر خوانده می‌شود</b>؛ فقط پیامک‌های بانکی که خودتان انتخاب کنید فرستاده می‌شوند و گفتگوهای شخصی از کامپیوتر خارج نمی‌شوند.</p>
+
+  <details class="guide"><summary>گرفتن فایل پیامک‌ها از آیفون</summary>
+    <p><b>اوبونتو / لینوکس</b></p>
+    <ol class="steps">
+      <li>یک بار نصب: <code class="token">sudo apt install libimobiledevice-utils</code></li>
+      <li>آیفون را با کابل وصل کنید و قفلش را باز کنید، بعد:
+        <code class="token">idevicepair pair</code>
+        روی آیفون <b>Trust</b> را بزنید و رمز گوشی را بدهید. اگر خطا داد، دستور را دوباره بزنید.</li>
+      <li>پشتیبان:
+        <code class="token">mkdir -p ~/iphone-backup &amp;&amp; idevicebackup2 backup --full ~/iphone-backup</code>
+        <div class="small muted">بسته به حجم گوشی چند دقیقه تا یک ساعت؛ به اندازه فضای پرشده آیفون جای خالی لازم است.</div></li>
+      <li>جای فایل پیامک‌ها:
+        <code class="token">find ~/iphone-backup -name 3d0d7e5fb2ce288813306e4d4636395e047a3d28</code></li>
+    </ol>
+    <p><b>ویندوز</b></p>
+    <ol class="steps">
+      <li>برنامه <b>Apple Devices</b> (یا iTunes) ← آیفون ← <b>Back up all of the data on your iPhone to this computer</b>
+        ← <b>Encrypt local backup</b> خاموش ← <b>Back Up Now</b>.</li>
+      <li>در File Explorer بروید به <code class="token">%USERPROFILE%\Apple\MobileSync\Backup</code>
+        (یا <code>%APPDATA%\Apple Computer\MobileSync\Backup</code>) و فایل
+        <code class="token">3d0d7e5fb2ce288813306e4d4636395e047a3d28</code> را جستجو کنید.</li>
+    </ol>
+    <p><b>مک:</b> Finder ← آیفون ← Back Up Now (بدون رمزگذاری)؛ همان فایل در <code>~/Library/Application Support/MobileSync/Backup</code> است.
+      اگر Messages in iCloud روشن است، <code>~/Library/Messages/chat.db</code> هم کار می‌کند.</p>
+    <p class="muted small">پشتیبان رمزدار خوانده نمی‌شود. اگر قبلاً رمز گذاشته‌اید، در ویندوز/مک تیک Encrypt را بردارید، و در لینوکس:
+      <code>idevicebackup2 -i encryption off</code></p>
+  </details>
+
+  <div class="field">
+    <label for="backup-file">فایل پیامک‌ها (<span class="mono">3d0d7e5f…</span> یا <span class="mono">sms.db</span>)</label>
+    <input type="file" id="backup-file">
+  </div>
+  <div class="field">
+    <label>کدام پیامک‌ها؟</label>
+    <div class="period-pick">{% for p in periods %}
+      <label class="period"><input type="radio" name="backup-period" value="{{ p.key }}" data-start="{{ p.start }}"{% if forloop.first %} checked{% endif %}>
+        <span><b>{{ p.label }}</b><small>{{ p.hint }}</small></span></label>{% endfor %}
+    </div>
+  </div>
+  <div id="backup-status" class="small" aria-live="polite"></div>
+  <div id="backup-senders" class="hidden">
+    <p class="small muted">فرستنده‌ها — فقط تیک‌خورده‌ها فرستاده می‌شوند (شماره موبایل‌ها تیک ندارند):</p>
+    <ul class="list sender-list"></ul>
+  </div>
+  <button class="btn block" id="backup-send" type="button" disabled>ارسال پیامک‌های بانک</button>
+  <div id="backup-result" aria-live="polite"></div>
+  <noscript><p class="muted small">این بخش به جاوااسکریپت نیاز دارد.</p></noscript>
+</div>
+
+<h2>چسباندن دستی</h2>
 <ol class="steps">
   <li>در برنامه Messages، روی پیامک بانک انگشت نگه دارید و <b>Copy</b> را بزنید.</li>
   <li>اینجا بچسبانید. برای چند پیامک، بینشان یک خط فقط با <code>---</code> بگذارید.</li>
-  <li>دکمه ثبت را بزنید. پیامک تکراری دوباره ثبت نمی‌شود، پس نگران نباشید.</li>
+  <li>دکمه ثبت را بزنید.</li>
 </ol>
 <form method="post" class="card" novalidate>{% csrf_token %}
   {% include "ledger/_field.html" with f=form.text %}
   <div class="actions"><button class="btn" type="submit">ثبت</button></div>
 </form>
 <p class="muted small">پیامک‌های رمز پویا و کد تأیید هیچ‌وقت ذخیره نمی‌شوند.</p>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'ledger/vendor/sqljs/sql-wasm-browser.js' %}" defer></script>
+<script src="{% static 'ledger/import_backup.js' %}" defer></script>
 {% endblock %}

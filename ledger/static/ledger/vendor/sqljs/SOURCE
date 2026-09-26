@@ -1,0 +1,6 @@
+sql.js 1.14.2 (MIT, see LICENSE): dist/sql-wasm-browser.js and dist/sql-wasm-browser.wasm
+from https://registry.npmjs.org/sql.js/-/sql.js-1.14.2.tgz
+npm integrity sha512-3ZGPovObMFrdw79zrUHbfdE/DLIsy8jdNdssmMSQuRAymedU6q84asPt0kgiqrdMYlPegDItiIMfmIXzZnYFcw==
+sha256 sql-wasm-browser.js   35e39a73b2e0bc1c2202a4cadb23bcf7a3a77071a39c270f014402968785b95f
+sha256 sql-wasm-browser.wasm 38c14f6e379210bc942bdc4ebca44e7bfdb4318ecc1c72ca666a28fdce96670a
+Used only by the import page, to read an iPhone backup's sms.db inside the browser.

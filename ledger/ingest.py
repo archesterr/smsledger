@@ -12,6 +12,7 @@ from itertools import groupby
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.utils import timezone
 
 from . import parsers, rules, security, vault
 from .models import Account, Message, Transaction, User
@@ -52,12 +53,14 @@ def split_batch(text: str) -> list[str]:
     return [b for b in SPLIT_RE.split(text.replace("\r", "")) if b.strip()]
 
 
-def ingest(user, texts: list[str], source: str, device=None) -> list[dict]:
+def ingest(user, texts: list[str], source: str, device=None, times: list | None = None) -> list[dict]:
     """No count cap on purpose: the Shortcut deletes its queue after a successful response, so
-    dropping items would lose them. The request body size limit bounds the work instead."""
+    dropping items would lose them. The request body size limit bounds the work instead.
+    times: when each SMS arrived, if known (an iPhone backup); otherwise now."""
     batch = Batch(user)
+    times = times or [None] * len(texts)
     try:
-        results = [ingest_one(user, t, source, device, batch) for t in texts]
+        results = [ingest_one(user, t, source, device, batch, at) for t, at in zip(texts, times, strict=True)]
     finally:
         batch.finish()
     # one summary line per request: counts only, never SMS text or amounts
@@ -66,7 +69,7 @@ def ingest(user, texts: list[str], source: str, device=None) -> list[dict]:
     return results
 
 
-def ingest_one(user, raw: str, source: str, device=None, batch: Batch | None = None) -> dict:
+def ingest_one(user, raw: str, source: str, device=None, batch: Batch | None = None, received_at=None) -> dict:
     raw = (raw or "").strip()[:MAX_SMS_CHARS]
     if not raw:
         return {"status": "empty"}
@@ -80,12 +83,14 @@ def ingest_one(user, raw: str, source: str, device=None, batch: Batch | None = N
         # never stored, never logged: not even the hash
         return {"status": "ignored", "reason": "sensitive"}
     h = vault.fingerprint(user, raw)
-    tx, err = parsers.parse(raw)
+    received_at = received_at or timezone.now()
+    tx, err = parsers.parse(raw, ref=received_at)  # year for banks that send none
     if not vault.has_key(user.pk):
         try:
             with transaction.atomic():
                 Message.objects.create(user=user, hash=h, inbox=vault.seal_inbox(user.vault_pub, user.pk, raw),
-                                       source=(source or "")[:40], device=device, status=Message.PENDING)
+                                       source=(source or "")[:40], device=device, status=Message.PENDING,
+                                       received_at=received_at)
         except IntegrityError:
             if Message.objects.filter(user=user, hash=h).exists():
                 return {"status": "duplicate"}
@@ -95,7 +100,7 @@ def ingest_one(user, raw: str, source: str, device=None, batch: Batch | None = N
     try:
         with transaction.atomic():
             msg = Message.objects.create(
-                user=user, hash=h, raw=raw, source=(source or "")[:40], device=device,
+                user=user, hash=h, raw=raw, source=(source or "")[:40], device=device, received_at=received_at,
                 status=Message.PARSED if tx else Message.UNPARSED, error=(err or "")[:200],
             )
             if tx:
