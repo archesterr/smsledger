@@ -40,6 +40,7 @@ urlpatterns = [
     path("accounts/<int:pk>/", app.account_edit, name="account_edit"),
     path("accounts/<int:pk>/delete/", app.account_delete, name="account_delete"),
     path("import/", app.import_sms, name="import"),
+    path("import/batch/", app.import_batch, name="import_batch"),
     path("messages/", app.messages_list, name="messages"),
     path("messages/<int:pk>/delete/", app.message_delete, name="message_delete"),
     path("messages/<int:pk>/share/", app.message_share, name="message_share"),

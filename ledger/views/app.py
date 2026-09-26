@@ -1,16 +1,20 @@
 import csv
-from datetime import datetime, timedelta
+import json
+from collections import Counter
+from datetime import UTC, datetime, timedelta
 
 from django.contrib import messages
+from django.core.exceptions import RequestDataTooBig
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import RestrictedError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from .. import audit, charts, ingest, jalali, money, parsers, reports, rules
+from .. import audit, charts, ingest, jalali, money, parsers, reports, rules, shortcut
 from ..forms import (
     AccountForm,
     CategoryForm,
@@ -417,6 +421,22 @@ def account_delete(request, pk):
 
 
 # ---- import & unparsed messages --------------------------------------------------------
+def import_periods() -> list[dict]:
+    """The backup reader's choices, on Shamsi month boundaries. start: ms since epoch (JS time)."""
+    jy, jm, _ = jalali.today()
+
+    def since(y, m, with_year=False):
+        label = f"از ۱ {jalali.MONTHS[m - 1]}" + (f" {y}" if with_year else "")
+        return {"hint": money.fa_digits(label), "start": int(jalali.day_start(y, m, 1).timestamp() * 1000)}
+
+    return [
+        {"key": "month", "label": "ماه گذشته", **since(*jalali.add_months(jy, jm, -1))},
+        {"key": "3months", "label": "سه ماه اخیر", **since(*jalali.add_months(jy, jm, -3))},
+        {"key": "year", "label": "یک سال اخیر", **since(jy - 1, jm, with_year=True)},
+        {"key": "all", "label": "همه", "hint": "کل تاریخچه", "start": 0},
+    ]
+
+
 def import_sms(request):
     form = ImportForm(request.POST or None)
     result = None
@@ -425,7 +445,42 @@ def import_sms(request):
         res = ingest.ingest(request.user, texts, "paste")
         result = {k: sum(r["status"] == k for r in res) for k in ("created", "duplicate", "unparsed", "ignored")}
         form = ImportForm()
-    return render(request, "ledger/import.html", {"nav": "more", "form": form, "result": result})
+    return render(request, "ledger/import.html", {
+        "nav": "more", "form": form, "result": result, "periods": import_periods(),
+        "otp_pattern": shortcut.OTP_PATTERN,
+    })
+
+
+BACKUP_BATCH = 500
+EARLIEST_SMS = datetime(2000, 1, 1, tzinfo=UTC)
+
+
+@require_POST
+def import_batch(request):
+    """The import page's backup reader posts the bank SMS the user picked, a batch at a time:
+    {"items": [{"text": "...", "at": <ms since epoch>}]}. The backup itself never leaves the
+    browser; "at" gives each SMS its real arrival time (the year, for banks that send none)."""
+    try:
+        items = json.loads(request.body or b"{}").get("items")
+    except (ValueError, AttributeError, RequestDataTooBig):
+        items = None
+    if not isinstance(items, list) or not 0 < len(items) <= BACKUP_BATCH or \
+            not all(isinstance(i, dict) for i in items):
+        return JsonResponse({"error": "bad request"}, status=400)
+    latest = timezone.now() + timedelta(days=1)
+    texts, times = [], []
+    for item in items:
+        text, at = item.get("text"), item.get("at")
+        texts.append(text if isinstance(text, str) else "")
+        when = None
+        if isinstance(at, int | float) and not isinstance(at, bool):
+            try:
+                when = datetime.fromtimestamp(at / 1000, tz=UTC)
+            except (OverflowError, OSError, ValueError):
+                pass
+        times.append(when if when and EARLIEST_SMS <= when <= latest else None)
+    results = ingest.ingest(request.user, texts, "backup", times=times)
+    return JsonResponse({"count": dict(Counter(r["status"] for r in results))})
 
 
 def messages_list(request):

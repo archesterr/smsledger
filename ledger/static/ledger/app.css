@@ -392,6 +392,25 @@ details.table-view table { margin-top: 8px; }
   background: var(--raised); border: 1px dashed var(--accent); border-radius: 12px; padding: 12px; margin: 8px 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
 }
+.period-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.period { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 400; cursor: pointer;
+  border: 1px solid var(--line-strong); border-radius: 12px; padding: 9px 11px; background: var(--raised); }
+.period:has(input:checked) { border-color: var(--accent); background: var(--accent-wash); }
+.period span { display: flex; flex-direction: column; line-height: 1.5; }
+.period small { color: var(--muted); font-size: 12px; }
+.sender-list label { display: flex; align-items: center; gap: 10px; font-weight: 400; margin: 0; padding: 10px 12px; cursor: pointer; }
+.sender-list .main { min-width: 0; flex: 1; }
+.sender-list .t1 { display: block; direction: ltr; text-align: right; font-size: 13.5px; }
+.sender-list .t2 { display: block; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.sender-list .n { flex: none; font-weight: 650; }
+.warn-text { color: var(--critical); }
+.progress { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; margin: 10px 0; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.message-box {
+  direction: rtl; unicode-bidi: plaintext; text-align: start; user-select: all; font: inherit; font-size: 14.5px; line-height: 1.9;
+  background: var(--raised); border: 1px dashed var(--accent); border-radius: 12px; padding: 12px; margin: 8px 0 12px;
+}
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 14px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; }
@@ -407,6 +426,11 @@ details.table-view table { margin-top: 8px; }
 .menu .ico { width: 26px; text-align: center; font-size: 18px; }
 .menu .chev { margin-inline-start: auto; color: var(--muted); }
 .auth { max-width: 400px; margin: 7vh auto 0; }
+.auth.guide-page { max-width: 520px; margin-top: 3vh; }
+.auth.guide-page h2 { margin-top: 22px; }
+.bullets { list-style: none; padding: 0; margin: 6px 0; }
+.bullets li { margin-bottom: 6px; }
+.join-qr { display: block; width: fit-content; margin: 10px auto 0; }
 .auth .brand-big { font-size: 24px; font-weight: 750; text-align: center; margin-bottom: 4px; }
 .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-size: 14px; }
 .filters summary { cursor: pointer; list-style: none; }

@@ -7,10 +7,14 @@
 <h2>دعوت دوستان</h2>
 {% if new_link %}
 <div class="card">
-  <p><b>لینک دعوت (فقط همین یک بار نمایش داده می‌شود):</b></p>
-  <code class="token" id="invite">{{ new_link }}</code>
-  <button class="btn secondary small" type="button" data-copy="invite">کپی</button>
-  <p class="muted small">یک بار مصرف است و تا چند روز اعتبار دارد. در پیام‌رسانی امن بفرستید.</p>
+  <p><b>دعوت آماده است.</b> این متن را کپی کنید و در تلگرام یا واتس‌اپ برای دوستتان بفرستید. لینک داخلش فقط همین یک بار نمایش داده می‌شود.</p>
+  <pre class="message-box" id="invite-msg">{{ invite_message }}</pre>
+  <button class="btn block" type="button" data-copy="invite-msg">کپی متن دعوت</button>
+  <details class="table-view"><summary>فقط خود لینک</summary>
+    <code class="token" id="invite">{{ new_link }}</code>
+    <button class="btn secondary small" type="button" data-copy="invite">کپی لینک</button>
+  </details>
+  <p class="muted small">لینک یک بار مصرف است و تا {{ invite_days|fa }} روز اعتبار دارد. با باز کردنش، دوستتان راهنمای قدم‌به‌قدم و فرم ساخت حساب را در یک صفحه می‌بیند.</p>
 </div>
 {% endif %}
 <form method="post" action="{% url 'invite_create' %}" class="card row wrap" novalidate>{% csrf_token %}

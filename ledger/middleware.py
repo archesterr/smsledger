@@ -23,6 +23,8 @@ CSP = "; ".join([
 ])
 # Django's admin still uses a few inline style attributes.
 CSP_ADMIN = CSP.replace("style-src 'self'", "style-src 'self' 'unsafe-inline'")
+# The import page reads an iPhone backup in the browser with SQLite compiled to WebAssembly.
+CSP_WASM = CSP.replace("script-src 'self'", "script-src 'self' 'wasm-unsafe-eval'")
 
 
 class SecurityHeadersMiddleware:
@@ -34,9 +36,8 @@ class SecurityHeadersMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        response.headers.setdefault(
-            "Content-Security-Policy", CSP_ADMIN if request.path.startswith("/admin/") else CSP
-        )
+        csp = CSP_ADMIN if request.path.startswith("/admin/") else CSP_WASM if request.path == "/import/" else CSP
+        response.headers.setdefault("Content-Security-Policy", csp)
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
         # no other site can open this one in a window it controls, or embed its responses
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")

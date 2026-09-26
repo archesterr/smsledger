@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="{% static 'ledger/app.css' %}">
 <link rel="stylesheet" href="{% static 'ledger/banks.css' %}">
 <script src="{% static 'ledger/app.js' %}" defer></script>
+{% block scripts %}{% endblock %}
 <title>{% block title %}{% endblock %} · {{ site_name }}</title>
 </head>
 <body class="{% if not user.is_authenticated %}anon{% endif %}">
