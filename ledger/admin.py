@@ -4,18 +4,28 @@ browsing friends' money."""
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
+from . import vault
 from .models import Device, Invite, SupportSample, User
 
 
 @admin.register(User)
 class LedgerUserAdmin(UserAdmin):
-    list_display = ("username", "is_active", "is_staff", "date_joined", "last_login")
+    list_display = ("username", "is_active", "is_staff", "encryption", "date_joined", "last_login")
     fieldsets = (
-        (None, {"fields": ("username", "password")}),
+        (None, {"fields": ("username", "password", "encryption")}),
         ("Status", {"fields": ("is_active", "is_staff", "is_superuser")}),
         ("Dates", {"fields": ("last_login", "date_joined")}),
     )
-    readonly_fields = ("last_login", "date_joined")
+    readonly_fields = ("last_login", "date_joined", "encryption")
+
+    @admin.display(description="Data encryption")
+    def encryption(self, obj):
+        return {
+            vault.PROTECTED: "Protected. Setting a new password here LOCKS this user's data until they enter "
+                             "their recovery key (you can't unlock it for them).",
+            vault.UNPROTECTED: "Waiting for the user's first login since encryption was added.",
+            vault.LOCKED: "Locked: the user must enter their recovery key (or start over).",
+        }.get(obj.vault_state, "No keys yet.")
 
 
 @admin.register(Invite)

@@ -430,3 +430,17 @@ details.table-view table { margin-top: 8px; }
   .tabs, .top, .actions, .btn { display: none !important; }
   body { padding: 0; background: #fff; }
 }
+
+/* ---- security page ---- */
+.score-meter { margin: 8px 0 4px; }
+.checks { list-style: none; margin: 12px 0 8px; padding: 0; }
+.checks li { display: flex; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); line-height: 1.55; }
+.checks li:first-child { border-top: 0; }
+.checks .mark { flex: none; font-size: 16px; }
+.pill.ok { background: var(--accent-wash); color: var(--ink); }
+.events li.warn .t1 { color: var(--critical); font-weight: 650; }
+.recovery {
+  display: block; margin: 12px 0 4px; padding: 14px 12px; border-radius: 12px; background: var(--track);
+  font: 600 17px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.04em;
+  text-align: center; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all;
+}

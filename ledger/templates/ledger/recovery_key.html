@@ -1,0 +1,17 @@
+{% extends "ledger/base.html" %}
+{% block title %}کلید بازیابی{% endblock %}
+{% block heading %}کلید بازیابی داده‌ها{% endblock %}
+{% block content %}
+{% if missing %}
+<div class="alert warning"><span class="ico">🔑</span><div><b>یک قدم لازم:</b> داده‌های شما رمزنگاری شده و فقط رمز عبورتان بازش می‌کند.
+  اگر رمز را فراموش کنید، <b>تنها راه</b> برگرداندن داده‌ها این کلید است. مدیر سرور هم نمی‌تواند بازشان کند.</div></div>
+{% else %}
+<div class="alert info"><span class="ico">✅</span><div>کلید بازیابی ساخته و ذخیره شده. اگر گمش کرده‌اید یا فکر می‌کنید کسی آن را دیده، کلید تازه بسازید؛ کلید قبلی باطل می‌شود.</div></div>
+{% endif %}
+<form method="post" class="card" novalidate>{% csrf_token %}
+  <input type="hidden" name="action" value="create">
+  <p>کلید بازیابی ۳۲ حرف و عدد است. آن را <b>جدا از رمز عبور</b> نگه دارید: مثلاً روی کاغذ، یا در برنامه Passwords آیفون.</p>
+  {% if need_pw %}{% include "ledger/_field.html" with f=form.password %}{% endif %}
+  <button class="btn" type="submit">{% if missing %}ساختن کلید بازیابی{% else %}ساختن کلید تازه{% endif %}</button>
+</form>
+{% endblock %}

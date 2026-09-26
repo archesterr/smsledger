@@ -21,7 +21,7 @@ from ledger.models import (
     User,
 )
 
-from .helpers import PASSWORD, BaseTest, blu, make_device, make_user
+from .helpers import PASSWORD, BaseTest, blu, find, make_device, make_user
 
 
 def seed(user, n=3):
@@ -86,7 +86,8 @@ class TestTenantIsolation(BaseTest):
     def test_lists_and_exports_only_show_own_rows(self):
         r = self.client.get("/tx/")
         self.assertEqual(r.context["page"].paginator.count, 1)
-        rows = list(csv.reader(io.StringIO(self.client.get("/settings/export.csv").content.decode("utf-8-sig"))))
+        export = self.client.post("/settings/export.csv", {"password": PASSWORD})
+        rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
         self.assertEqual(len(rows), 2)  # header + bob's one transaction
         self.assertEqual(self.client.get("/messages/").context["total"], 1)
         self.assertEqual(self.client.get("/inbox/").context["total"], 1)
@@ -125,7 +126,7 @@ class TestPages(BaseTest):
 
     def test_manual_transaction_and_inbox_json(self):
         cash = Account.objects.get(user=self.u, kind=Account.CASH)
-        cat = Category.objects.get(user=self.u, name="رستوران و کافه")
+        cat = find(Category.objects.filter(user=self.u), name="رستوران و کافه")
         r = self.client.post("/tx/new/", {"direction": "OUT", "amount": "۱۵۰٬۰۰۰", "account": cash.pk,
                                           "date": "۱۴۰۵/۰۷/۰۱", "time": "۱۳:۴۵", "category": cat.pk, "note": "ناهار"})
         self.assertEqual(r.status_code, 302)
@@ -139,15 +140,15 @@ class TestPages(BaseTest):
         self.assertEqual(sms_tx.category, cat)
 
     def test_rule_applies_to_uncategorized(self):
-        cat = Category.objects.get(user=self.u, name="اجاره و مسکن")
+        cat = find(Category.objects.filter(user=self.u), name="اجاره و مسکن")
         r = self.client.post("/rules/new/", {"category": cat.pk, "direction": "OUT", "amount_min": "200",
                                              "amount_max": "200", "priority": "100", "enabled": "on"})
         self.assertEqual(r.status_code, 302)
         rule = Rule.objects.get(user=self.u)
         self.assertEqual((rule.amount_min, rule.amount_max), (2000, 2000))  # entered in toman
-        self.assertEqual(Transaction.objects.get(user=self.u, amount=2000).category, cat)
+        self.assertEqual(find(Transaction.objects.filter(user=self.u), amount=2000).category, cat)
         ingest.ingest_one(self.u, blu(2000, balance=1, time="20:00"), "t")
-        self.assertEqual(Transaction.objects.get(user=self.u, balance=1).category_by, Transaction.BY_RULE)
+        self.assertEqual(find(Transaction.objects.filter(user=self.u), balance=1).category_by, Transaction.BY_RULE)
 
     def test_rule_without_conditions_rejected(self):
         cat = Category.objects.filter(user=self.u).first()
@@ -156,7 +157,7 @@ class TestPages(BaseTest):
         self.assertFalse(Rule.objects.exists())
 
     def test_budgets(self):
-        cat = Category.objects.get(user=self.u, name="خرید")
+        cat = find(Category.objects.filter(user=self.u), name="خرید")
         r = self.client.post("/budgets/", {f"b{cat.pk}": "۲۰۰٬۰۰۰"})
         self.assertEqual(r.status_code, 302)
         self.assertEqual(Budget.objects.get(category=cat).amount, 2_000_000)
@@ -224,7 +225,7 @@ class TestPages(BaseTest):
         self.assertNotIn(token, d.token_hash + d.token_prefix + d.name)
         self.assertNotIn(token, self.client.get("/setup/").content.decode())
         self.client.logout()
-        self.assertEqual(self.post_sms(token, {"sms": blu(9, balance=9)}).json()["status"], "created")
+        self.assertEqual(self.post_sms(token, {"sms": blu(9, balance=9)}).json()["status"], "received")
 
     def test_setup_opens_the_guide_for_the_phones_ios(self):
         ua16 = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_7_16 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"

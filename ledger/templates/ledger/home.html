@@ -14,6 +14,10 @@
 </div>
 
 <div class="stack" id="alerts">
+{% if failed_logins %}
+  <a class="alert critical" href="{% url 'security' %}"><span class="ico">🚨</span>
+    <div><b>{{ failed_logins|fa }} تلاش ناموفق برای ورود به حساب شما</b><br><span class="small">از آخرین ورودتان. اگر شما نبودید، رمز عبور را عوض کنید و ورود دو مرحله‌ای را روشن کنید.</span></div></a>
+{% endif %}
 {% if not health.has_device %}
   <a class="alert info" href="{% url 'setup' %}"><span class="ico">📱</span>
     <div><b>راه‌اندازی آیفون</b><br><span class="small">تا گوشی را وصل نکنید، پیامک‌های بانک خودکار ثبت نمی‌شوند. چند دقیقه طول می‌کشد.</span></div></a>

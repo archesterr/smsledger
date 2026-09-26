@@ -1,0 +1,27 @@
+{% extends "ledger/base.html" %}
+{% block title %}داده‌ها قفل است{% endblock %}
+{% block heading %}داده‌ها قفل است{% endblock %}
+{% block content %}
+<div class="alert warning"><span class="ico">🔒</span><div>
+  رمز عبور شما بیرون از برنامه عوض شده{% if reset_at %} (مثلاً توسط مدیر){% endif %}. داده‌ها با کلیدی رمزنگاری شده‌اند که فقط رمز <b>قبلی</b> یا <b>کلید بازیابی</b> شما بازش می‌کند.
+</div></div>
+<h2>باز کردن با کلید بازیابی</h2>
+<form method="post" class="card" novalidate>{% csrf_token %}
+  <input type="hidden" name="action" value="recover">
+  {% include "ledger/_errors.html" with form=rec %}
+  {% include "ledger/_field.html" with f=rec.code %}
+  {% include "ledger/_field.html" with f=rec.password %}
+  <button class="btn" type="submit">باز کردن داده‌ها</button>
+</form>
+<h2>کلید بازیابی را ندارم</h2>
+<form method="post" class="card" novalidate data-confirm="همه داده‌ها برای همیشه پاک شود؟">{% csrf_token %}
+  <input type="hidden" name="action" value="reset">
+  <p class="small">بدون کلید بازیابی، هیچ‌کس (حتی مدیر) نمی‌تواند داده‌های قبلی را باز کند. می‌توانید آن‌ها را پاک کنید و از نو شروع کنید.
+    کلید آیفون‌ها همچنان کار می‌کند و پیامک‌های بعدی ثبت می‌شوند.</p>
+  {% include "ledger/_errors.html" with form=reset %}
+  {% include "ledger/_field.html" with f=reset.password %}
+  {% include "ledger/_field.html" with f=reset.confirm %}
+  <button class="btn danger" type="submit">پاک کردن و شروع دوباره</button>
+</form>
+<form method="post" action="{% url 'logout' %}" class="actions">{% csrf_token %}<button class="btn ghost" type="submit">خروج</button></form>
+{% endblock %}

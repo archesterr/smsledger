@@ -2,6 +2,7 @@
 built-in hints (fees, interest, salary). A category the user picked by hand is never overridden."""
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 from datetime import timedelta
 
 from django.db.models import Count
@@ -77,14 +78,24 @@ def recent_top(user, direction: str) -> list[int]:
                                            category__isnull=False, category__archived=False))
 
 
-def suggest(tx: Transaction, recent: list[int] | None = None, limit: int = 3) -> list[int]:
-    """Category ids to offer first: what this counterparty / this exact recurring amount got
-    before, then what the user picks most lately."""
-    base = Transaction.objects.filter(user_id=tx.user_id, direction=tx.direction, category__isnull=False,
-                                      category__archived=False).exclude(pk=tx.pk)
-    ids: list[int] = []
-    if tx.counterparty:
-        ids += _top(base.filter(counterparty=tx.counterparty))
-    ids += _top(base.filter(amount=tx.amount, title=tx.title))
-    ids += recent if recent is not None else recent_top(tx.user, tx.direction)
-    return list(dict.fromkeys(ids))[:limit]
+class History:
+    """Past categorized transactions, decrypted once for a whole page of suggestions (amounts
+    and counterparties are encrypted, so they can't be matched in SQL)."""
+
+    def __init__(self, user):
+        self.by_counterparty: dict[tuple, Counter] = defaultdict(Counter)
+        self.by_amount: dict[tuple, Counter] = defaultdict(Counter)
+        for t in Transaction.objects.filter(user=user, category__isnull=False, category__archived=False):
+            if t.counterparty:
+                self.by_counterparty[(t.direction, t.counterparty)][t.category_id] += 1
+            self.by_amount[(t.direction, t.amount, t.title)][t.category_id] += 1
+
+    def suggest(self, tx: Transaction, recent: list[int], limit: int = 3) -> list[int]:
+        """Category ids to offer first: what this counterparty / this exact recurring amount got
+        before, then what the user picks most lately."""
+        ids: list[int] = []
+        if tx.counterparty:
+            ids += [c for c, _ in self.by_counterparty[(tx.direction, tx.counterparty)].most_common(3)]
+        ids += [c for c, _ in self.by_amount[(tx.direction, tx.amount, tx.title)].most_common(3)]
+        ids += recent
+        return list(dict.fromkeys(ids))[:limit]

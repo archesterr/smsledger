@@ -64,6 +64,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "ledger.middleware.SecurityHeadersMiddleware",
+    # after auth + messages: unlocks the signed-in user's data key for this request (vault.py)
+    "ledger.middleware.VaultMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

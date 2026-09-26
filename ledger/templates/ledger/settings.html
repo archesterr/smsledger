@@ -2,6 +2,9 @@
 {% block title %}تنظیمات{% endblock %}
 {% block heading %}تنظیمات و امنیت{% endblock %}
 {% block content %}
+<a class="alert info" href="{% url 'security' %}"><span class="ico">🛡️</span>
+  <div><b>امنیت حساب</b><br><span class="small">وضعیت رمزنگاری، کلید بازیابی، دستگاه‌هایی که وارد هستند و رویدادهای ورود.</span></div></a>
+
 <h2>نمایش</h2>
 <form method="post" class="card" novalidate>{% csrf_token %}<input type="hidden" name="form" value="unit">
   {% include "ledger/_field.html" with f=unit_form.unit %}
@@ -31,7 +34,7 @@
 
 <h2>داده‌های من</h2>
 <div class="card">
-  <p>همه تراکنش‌ها با دسته و توضیح و متن پیامک، در یک فایل CSV (با اکسل باز می‌شود).</p>
+  <p>همه تراکنش‌ها با دسته و توضیح و متن پیامک، در یک فایل CSV (با اکسل باز می‌شود). رمز عبور پرسیده می‌شود؛ فایل رمزنگاری‌شده نیست.</p>
   <a class="btn secondary" href="{% url 'export_all' %}">⬇️ دریافت همه داده‌ها</a>
 </div>
 <div class="card">

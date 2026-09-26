@@ -30,13 +30,14 @@
 
 <h2>کاربران</h2>
 <div class="card table-wrap"><table>
-  <thead><tr><th>کاربر</th><th>عضویت</th><th>دستگاه</th><th>آخرین پیامک</th><th class="n">خوانده‌نشده</th><th></th></tr></thead>
+  <thead><tr><th>کاربر</th><th>عضویت</th><th>دستگاه</th><th>آخرین پیامک</th><th class="n">خوانده‌نشده</th><th>رمزنگاری</th><th></th></tr></thead>
   <tbody>{% for r in rows %}<tr>
     <td>{{ r.u.username }}{% if r.u.is_staff %} <span class="pill">مدیر</span>{% endif %}{% if not r.u.is_active %} <span class="pill warn">غیرفعال</span>{% endif %}{% if r.u.has_2fa %} 🔐{% endif %}</td>
     <td>{{ r.u.date_joined|jdate }}</td>
     <td>{{ r.u.n_devices|fa }}</td>
     <td>{{ r.u.last_seen|ago }}{% if r.silent %} <span class="flag">⚠️ ساکت</span>{% endif %}</td>
     <td class="n">{{ r.unparsed|fa }}</td>
+    <td>{% if r.vault == "protected" %}🔒 فعال{% elif r.vault == "unprotected" %}<span class="pill warn">منتظر ورود</span>{% else %}<span class="pill">قفل</span>{% endif %}</td>
     <td>{% if r.u.pk != user.pk %}<form method="post" action="{% url 'user_toggle' r.u.pk %}" data-confirm="وضعیت این کاربر عوض شود؟">{% csrf_token %}
       <button class="btn ghost small">{% if r.u.is_active %}غیرفعال{% else %}فعال{% endif %}</button></form>{% endif %}</td>
   </tr>{% endfor %}</tbody>

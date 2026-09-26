@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .. import security
+from .. import audit, security
 from ..forms import CodeForm, DeviceForm, PasswordConfirmForm, UnitPrefForm
 from ..models import Device, RecoveryCode, Transaction, User
 from .app import csv_response
@@ -33,6 +33,7 @@ def setup(request):
         token = security.new_token()
         Device.objects.create(user=u, name=form.cleaned_data["name"], token_hash=security.sha256(token),
                               token_prefix=token[:8])
+        audit.record(u, "device_added", request)
         new_token = token  # shown once, in this response only; the DB keeps just the hash
         form = DeviceForm()
     devices = u.devices.filter(revoked_at__isnull=True).order_by("-created_at")
@@ -51,8 +52,9 @@ def device_revoke(request, pk):
     d = get_object_or_404(Device, pk=pk, user=request.user, revoked_at__isnull=True)
     d.revoked_at = timezone.now()
     d.save(update_fields=["revoked_at"])
+    audit.record(request.user, "device_revoked", request)
     messages.success(request, f"دسترسی «{d.name}» قطع شد.")
-    return redirect("setup")
+    return redirect("security" if request.POST.get("back") == "security" else "setup")
 
 
 # ---- settings -------------------------------------------------------------------------
@@ -69,9 +71,12 @@ def settings_view(request):
     elif request.method == "POST" and request.POST.get("form") == "password":
         pw_form = PasswordChangeForm(u, request.POST)
         if pw_form.is_valid():
-            pw_form.save()
+            u.password_changed_at = timezone.now()
+            pw_form.save()  # set_password re-wraps the data key with the new password (vault.py)
             update_session_auth_hash(request, pw_form.user)  # other sessions are logged out
-            messages.success(request, "رمز عبور عوض شد.")
+            audit.end(u, exclude_pk=request.session.get(audit.SID))
+            audit.record(u, "password_changed", request)
+            messages.success(request, "رمز عبور عوض شد. بقیه دستگاه‌ها از حساب خارج شدند.")
             return redirect("settings")
     return render(request, "ledger/settings.html", {
         "nav": "more", "unit_form": unit_form, "pw_form": pw_form,
@@ -99,6 +104,7 @@ def twofa_setup(request):
                 RecoveryCode.objects.bulk_create(
                     RecoveryCode(user=u, code_hash=security.recovery_hash(c)) for c in codes)
             request.session.pop("totp_setup", None)
+            audit.record(u, "2fa_on", request)
             return render(request, "ledger/twofa_done.html", {"nav": "more", "codes": codes})
         form.add_error("code", "کد درست نیست. ساعت گوشی را هم بررسی کنید.")
     uri = security.totp_uri(secret, u.username, settings.SITE_NAME)
@@ -119,6 +125,7 @@ def twofa_disable(request):
         u.totp_secret, u.totp_last_step = "", 0
         u.save(update_fields=["totp_secret", "totp_last_step"])
         u.recovery_codes.all().delete()
+        audit.record(u, "2fa_off", request)
         messages.success(request, "ورود دو مرحله‌ای خاموش شد.")
         return redirect("settings")
     return render(request, "ledger/confirm_password.html", {
@@ -128,9 +135,19 @@ def twofa_disable(request):
 
 
 def export_all(request):
-    return csv_response(Transaction.objects.filter(user=request.user).select_related("category", "account",
-                                                                                     "message"),
-                        f"smsledger-{request.user.username}.csv")
+    """Everything, decrypted, in one file: asks for the password first, like other risky actions."""
+    u = request.user
+    form = PasswordConfirmForm(u, request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        audit.record(u, "export", request)
+        return csv_response(Transaction.objects.filter(user=u).select_related("category", "account", "message"),
+                            f"smsledger-{u.username}.csv")
+    return render(request, "ledger/confirm_password.html", {
+        "nav": "more", "form": form, "title": "دریافت خروجی همه داده‌ها",
+        "warning": "فایل خروجی رمزنگاری‌شده نیست: همه تراکنش‌ها و متن پیامک‌ها را خوانا دارد. "
+                   "آن را جای امن نگه دارید و بعد از استفاده پاکش کنید.",
+        "button": "دریافت فایل",
+    })
 
 
 def delete_account(request):
