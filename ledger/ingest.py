@@ -1,4 +1,8 @@
-"""SMS -> Message -> Transaction. Safe to call any number of times with the same SMS."""
+"""SMS -> Message -> Transaction. Safe to call any number of times with the same SMS.
+
+With the owner's key at hand (they're using the app, or their account predates encryption) an
+SMS is parsed and recorded at once. Otherwise (the phone sends while they're logged out) it is
+sealed to their public key as PENDING, and process_pending() records it at their next login."""
 from __future__ import annotations
 
 import logging
@@ -7,9 +11,10 @@ from collections import Counter
 from itertools import groupby
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 
-from . import parsers, rules
-from .models import Account, Message, Transaction
+from . import parsers, rules, vault
+from .models import Account, Message, Transaction, User
 
 log = logging.getLogger(__name__)
 
@@ -70,8 +75,19 @@ def ingest_one(user, raw: str, source: str, device=None, batch: Batch | None = N
     if parsers.is_sensitive(raw):
         # never stored, never logged: not even the hash
         return {"status": "ignored", "reason": "sensitive"}
-    h = parsers.fingerprint(raw)
+    h = vault.fingerprint(user, raw)
     tx, err = parsers.parse(raw)
+    if not vault.has_key(user.pk):
+        try:
+            with transaction.atomic():
+                Message.objects.create(user=user, hash=h, inbox=vault.seal_inbox(user.vault_pub, user.pk, raw),
+                                       source=(source or "")[:40], device=device, status=Message.PENDING)
+        except IntegrityError:
+            if Message.objects.filter(user=user, hash=h).exists():
+                return {"status": "duplicate"}
+            raise
+        # parsed here only to tell the phone; stored sealed, recorded at the next login
+        return {"status": "received", "parsed": tx is not None}
     try:
         with transaction.atomic():
             msg = Message.objects.create(
@@ -94,7 +110,8 @@ def ingest_one(user, raw: str, source: str, device=None, batch: Batch | None = N
 def bank_account(user, bank: str, hint: str) -> Account:
     label = parsers.BANK_LABELS.get(bank, bank)
     acc, _ = Account.objects.get_or_create(
-        user=user, bank=bank, hint=hint, defaults={"kind": Account.BANK, "name": f"{label} {hint}".strip()}
+        user=user, bank=bank, hint_idx=vault.blind(vault.key_for(user.pk), hint),
+        defaults={"kind": Account.BANK, "name": f"{label} {hint}".strip(), "hint": hint},
     )
     return acc
 
@@ -140,8 +157,7 @@ def recompute_gaps(account: Account) -> int:
     """Flag transactions whose balance doesn't follow from the previous one (an SMS is missing
     in between). Manual entries without a balance count toward the expected balance, so adding
     the missed transaction by hand clears the flag. Returns the number of gaps."""
-    txs = list(account.transactions.order_by("occurred_at", "id")
-               .only("id", "occurred_at", "direction", "amount", "balance", "gap_amount"))
+    txs = list(account.transactions.order_by("occurred_at", "id"))
     expected, changed, gaps = None, [], 0
     for _, group in groupby(txs, key=lambda t: t.occurred_at):
         for t in _chain(expected, list(group)):
@@ -156,18 +172,57 @@ def recompute_gaps(account: Account) -> int:
             gaps += gap is not None
             if t.gap_amount != gap:
                 t.gap_amount = gap
+                t.has_gap = gap is not None
+                t.seal()
                 changed.append(t)
     if changed:
-        Transaction.objects.bulk_update(changed, ["gap_amount"])
+        Transaction.objects.bulk_update(changed, ["sealed", "has_gap"])
     return gaps
+
+
+def process_pending(user) -> int:
+    """Record the SMS that arrived while the owner was logged out. Needs their key (they're
+    logged in). Each message is claimed with a row lock, so two tabs can't record it twice."""
+    dek = vault.key_for(user.pk)
+    priv = None
+    batch, done = Batch(user), 0
+    for pk in user.messages.filter(status=Message.PENDING).order_by("id").values_list("pk", flat=True):
+        with transaction.atomic():
+            m = (Message.objects.select_for_update(skip_locked=True)
+                 .filter(pk=pk, status=Message.PENDING).first())
+            if m is None:
+                continue
+            priv = priv or vault.private_key(user, dek)
+            try:
+                raw = vault.open_inbox(priv, user.pk, m.inbox)
+            except vault.BadKey:  # sealed to a key pair that was since replaced (data reset)
+                m.delete()
+                continue
+            if parsers.is_sensitive(raw):
+                m.delete()
+                continue
+            tx, err = parsers.parse(raw, ref=m.received_at)  # year for banks that send none
+            m.raw, m.inbox = raw, b""
+            m.status, m.error = (Message.PARSED, "") if tx else (Message.UNPARSED, (err or "")[:200])
+            m.save()
+            if tx:
+                record(m, tx, batch)
+            done += 1
+    batch.finish()
+    if done:
+        log.info("pending processed user=%s n=%s", user.pk, done)
+    return done
 
 
 def reparse(user=None) -> dict:
     """Re-run parsers on unparsed messages (after a new bank template ships). Also purges any
-    stored message that the (possibly stricter) sensitive filter now catches."""
+    stored message that the (possibly stricter) sensitive filter now catches. Only for users whose
+    key this job has: the others' run at their next login (see middleware)."""
     qs = Message.objects.filter(status=Message.UNPARSED).select_related("user").order_by("user_id", "id")
     if user is not None:
         qs = qs.filter(user=user)
+    else:  # the startup job: accounts still waiting for their owner's first encrypted login
+        qs = qs.filter(user__in=User.objects.filter(~Q(key_srv=b"")))
     checked = fixed = purged = 0
     batches: dict[int, Batch] = {}
     for m in qs.iterator():

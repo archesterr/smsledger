@@ -1,16 +1,16 @@
 import csv
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q, RestrictedError, Sum
+from django.db.models import RestrictedError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from .. import charts, ingest, jalali, money, reports, rules
+from .. import audit, charts, ingest, jalali, money, parsers, reports, rules
 from ..forms import (
     AccountForm,
     CategoryForm,
@@ -55,7 +55,9 @@ def month_nav(jy: int, jm: int) -> dict:
 def home(request):
     u = request.user
     jy, jm = month_param(request)
+    prev = request.session.get("prev_login")
     return render(request, "ledger/home.html", {
+        "failed_logins": audit.failures_since(u, datetime.fromisoformat(prev)) if prev else 0,
         "nav": "home", **month_nav(jy, jm),
         "totals": reports.month_totals(u, jy, jm),
         "budgets": reports.budgets(u, jy, jm)[:5],
@@ -77,9 +79,10 @@ def inbox(request):
     by_id = {c.pk: c for c in cats}
     recent = {IN: rules.recent_top(u, IN), OUT: rules.recent_top(u, OUT)}
     kinds = {OUT: (Category.EXPENSE, Category.TRANSFER), IN: (Category.INCOME, Category.TRANSFER)}
+    history = rules.History(u) if txs else None
     items = []
     for t in txs:
-        sug = [by_id[i] for i in rules.suggest(t, recent[t.direction]) if i in by_id]
+        sug = [by_id[i] for i in history.suggest(t, recent[t.direction]) if i in by_id]
         rest = [c for c in cats if c.kind in kinds[t.direction] and c not in sug]
         items.append({"tx": t, "suggested": sug, "others": rest})
     total = Transaction.objects.filter(user=u, category__isnull=True).count()
@@ -99,10 +102,19 @@ def tx_set_category(request, pk):
 
 
 # ---- transactions ----------------------------------------------------------------
-def filtered(request):
+def _text(t: Transaction) -> str:
+    parts = [t.note, t.title, t.counterparty, t.category.name if t.category_id else "",
+             t.message.raw if t.message_id else ""]
+    return parsers.normalize("\n".join(parts)).casefold()
+
+
+def filtered(request) -> tuple[FilterForm, list[Transaction]]:
+    """SQL narrows by what's stored in the clear (dates, direction, category, account, gaps);
+    amount and text conditions run on the decrypted rows."""
     u = request.user
     form = FilterForm(u, request.GET or None)
     qs = Transaction.objects.filter(user=u).select_related("category", "account", "message")
+    checks = []
     if form.is_bound and form.is_valid():
         f = form.cleaned_data
         if f["month"]:
@@ -124,26 +136,26 @@ def filtered(request):
         if f["account"]:
             qs = qs.filter(account=f["account"])
         if f["amount_min"]:
-            qs = qs.filter(amount__gte=f["amount_min"])
+            checks.append(lambda t, v=f["amount_min"]: t.amount >= v)
         if f["amount_max"]:
-            qs = qs.filter(amount__lte=f["amount_max"])
+            checks.append(lambda t, v=f["amount_max"]: t.amount <= v)
         if f["gaps"]:
-            qs = qs.filter(gap_amount__isnull=False)
-        if f["q"]:
-            q = f["q"].strip()
-            qs = qs.filter(Q(note__icontains=q) | Q(title__icontains=q) | Q(counterparty__icontains=q)
-                           | Q(message__raw__icontains=q) | Q(category__name__icontains=q))
-    return form, qs
+            qs = qs.filter(has_gap=True)
+        q = parsers.normalize(f["q"] or "").casefold()
+        if q:
+            checks.append(lambda t: q in _text(t))
+    return form, [t for t in qs if all(c(t) for c in checks)]
 
 
 def tx_list(request):
-    form, qs = filtered(request)
-    sums = qs.aggregate(i=Sum("amount", filter=Q(direction=IN)), o=Sum("amount", filter=Q(direction=OUT)))
-    page = Paginator(qs, PAGE).get_page(request.GET.get("page"))
+    form, txs = filtered(request)
+    sum_in = sum(t.amount for t in txs if t.direction == IN)
+    sum_out = sum(t.amount for t in txs if t.direction == OUT)
+    page = Paginator(txs, PAGE).get_page(request.GET.get("page"))
     params = request.GET.copy()
     params.pop("page", None)
     return render(request, "ledger/tx_list.html", {
-        "nav": "tx", "form": form, "page": page, "sum_in": sums["i"] or 0, "sum_out": sums["o"] or 0,
+        "nav": "tx", "form": form, "page": page, "sum_in": sum_in, "sum_out": sum_out,
         "query": params.urlencode(), "categories": user_categories(request.user),
         "filtered": any(v for k, v in request.GET.items() if k != "page"),
     })
@@ -155,14 +167,16 @@ def csv_safe(value) -> str:
     return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
 
 
-def csv_response(qs, filename: str) -> HttpResponse:
+def csv_response(txs, filename: str) -> HttpResponse:
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     resp.write("﻿")  # BOM: Excel then reads the file as UTF-8 (Persian text)
     w = csv.writer(resp)
     w.writerow(["date", "time", "account", "direction", "amount_rial", "balance_rial", "category",
                 "note", "title", "counterparty", "source", "missed_before_rial", "sms"])
-    for t in qs.order_by("occurred_at", "id").iterator(chunk_size=500):
+    rows = txs.order_by("occurred_at", "id").iterator(chunk_size=500) if hasattr(txs, "order_by") \
+        else sorted(txs, key=lambda t: (t.occurred_at, t.pk))
+    for t in rows:
         w.writerow([
             jalali.fmt(*jalali.of(t.occurred_at)), t.occurred_at.astimezone(jalali.TEHRAN).strftime("%H:%M"),
             csv_safe(t.account.name), t.direction, t.amount, t.balance if t.balance is not None else "",
@@ -174,8 +188,8 @@ def csv_response(qs, filename: str) -> HttpResponse:
 
 
 def tx_export(request):
-    _, qs = filtered(request)
-    return csv_response(qs, "transactions.csv")
+    _, txs = filtered(request)
+    return csv_response(txs, "transactions.csv")
 
 
 def tx_new(request):

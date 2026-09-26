@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import api, app, auth, me, staff
+from .views import api, app, auth, me, security, staff
 
 urlpatterns = [
     # public
@@ -51,6 +51,11 @@ urlpatterns = [
     path("settings/2fa/disable/", me.twofa_disable, name="twofa_disable"),
     path("settings/export.csv", me.export_all, name="export_all"),
     path("settings/delete/", me.delete_account, name="delete_account"),
+    path("security/", security.security_home, name="security"),
+    path("security/sessions/<int:pk>/revoke/", security.session_revoke, name="session_revoke"),
+    path("security/sessions/revoke-others/", security.sessions_revoke_others, name="sessions_revoke_others"),
+    path("security/recovery-key/", security.recovery_key, name="recovery_key"),
+    path("unlock/", security.unlock, name="unlock"),
     # operator
     path("staff/", staff.staff_home, name="staff"),
     path("staff/invites/", staff.invite_create, name="invite_create"),

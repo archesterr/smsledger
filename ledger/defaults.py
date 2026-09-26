@@ -29,18 +29,32 @@ TRANSFERS = [("🔁", "انتقال بین حساب‌های خودم", "transfe
 
 
 def setup_defaults(user) -> None:
-    Account.objects.get_or_create(user=user, kind=Account.CASH, bank="", name="کیف پول (نقدی)")
+    """Needs the user's key in the keyring (names are encrypted)."""
+    if not Account.objects.filter(user=user, kind=Account.CASH, bank="").exists():
+        Account.objects.create(user=user, kind=Account.CASH, bank="", name="کیف پول (نقدی)")
+    if Category.objects.filter(user=user).exists():
+        return
     rows = [(Category.EXPENSE, EXPENSES), (Category.INCOME, INCOMES), (Category.TRANSFER, TRANSFERS)]
-    Category.objects.bulk_create(
-        [
-            Category(user=user, kind=kind, icon=icon, name=name, key=key, order=i)
-            for kind, items in rows
-            for i, (icon, name, key) in enumerate(items)
-        ],
-        ignore_conflicts=True,
-    )
+    cats = [
+        Category(user=user, kind=kind, icon=icon, name=name, key=key, order=i)
+        for kind, items in rows
+        for i, (icon, name, key) in enumerate(items)
+    ]
+    for c in cats:
+        c.seal()  # bulk_create skips save()
+    Category.objects.bulk_create(cats)
 
 
 def on_user_saved(sender, instance, created, raw=False, **kwargs):
-    if created and not raw:
+    from . import vault
+
+    dek = instance.__dict__.pop("_new_dek", None)
+    if dek is not None:  # set_password made this user's keys: this request may use them
+        vault.keyring()[instance.pk] = dek
+    if getattr(instance, "_vault_locked_by_reset", False):
+        from .models import SecurityEvent
+
+        instance._vault_locked_by_reset = False
+        SecurityEvent.objects.create(user=instance, kind="password_reset")
+    if created and not raw and vault.has_key(instance.pk):
         setup_defaults(instance)

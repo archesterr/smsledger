@@ -58,6 +58,26 @@ class UnitForm:
                     self.initial[name] = money.format_input(v, unit)
 
 
+class SealedModelForm(forms.ModelForm):
+    """ModelForm for a SealedModel: encrypted attributes (models.Sealed) aren't model fields, so
+    they are declared on the form, filled from the instance and written back to it here."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in self._sealed_fields():
+            if self.instance.pk and name not in self.initial:
+                self.initial[name] = getattr(self.instance, name)
+
+    def _sealed_fields(self) -> set[str]:
+        return self._meta.model.sealed_names() & set(self.fields)
+
+    def _post_clean(self):
+        super()._post_clean()
+        for name in self._sealed_fields():
+            if name in self.cleaned_data:
+                setattr(self.instance, name, self.cleaned_data[name])
+
+
 def user_categories(user, kinds=None):
     qs = Category.objects.filter(user=user, archived=False)
     return qs.filter(kind__in=kinds) if kinds else qs
@@ -161,11 +181,13 @@ class TxEditForm(forms.Form):
         self.fields["category"].queryset = user_categories(user)
 
 
-class CategoryForm(forms.ModelForm):
+class CategoryForm(SealedModelForm):
+    name = forms.CharField(label="نام", max_length=60)
+
     class Meta:
         model = Category
         fields = ["icon", "name", "kind", "archived"]
-        labels = {"icon": "ایموجی", "name": "نام", "kind": "نوع", "archived": "بایگانی (در لیست‌ها نشان داده نشود)"}
+        labels = {"icon": "ایموجی", "kind": "نوع", "archived": "بایگانی (در لیست‌ها نشان داده نشود)"}
 
     def __init__(self, user, *args, **kwargs):
         self.user = user
@@ -175,15 +197,15 @@ class CategoryForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        dup = Category.objects.filter(user=self.user, kind=data.get("kind"), name=data.get("name"))
-        if self.instance.pk:
-            dup = dup.exclude(pk=self.instance.pk)
-        if dup.exists():
+        name = (data.get("name") or "").strip()
+        others = Category.objects.filter(user=self.user, kind=data.get("kind")).exclude(pk=self.instance.pk)
+        if any(c.name == name for c in others):  # names are encrypted: compared here, not in SQL
             raise forms.ValidationError("دسته‌ای با همین نام وجود دارد.")
         return data
 
 
-class RuleForm(UnitForm, forms.ModelForm):
+class RuleForm(UnitForm, SealedModelForm):
+    text = forms.CharField(label="اگر متن پیامک یا توضیح شامل این بود", max_length=100, required=False)
     amount_min = AmountField(label="حداقل مبلغ", required=False)
     amount_max = AmountField(label="حداکثر مبلغ", required=False)
 
@@ -192,8 +214,7 @@ class RuleForm(UnitForm, forms.ModelForm):
         fields = ["category", "direction", "account", "text", "amount_min", "amount_max", "priority", "enabled"]
         labels = {
             "category": "این دسته را بده", "direction": "فقط برای", "account": "فقط در حساب",
-            "text": "اگر متن پیامک یا توضیح شامل این بود", "priority": "اولویت (عدد کمتر = زودتر)",
-            "enabled": "فعال",
+            "priority": "اولویت (عدد کمتر = زودتر)", "enabled": "فعال",
         }
 
     def __init__(self, user, *args, **kwargs):
@@ -215,19 +236,19 @@ class RuleForm(UnitForm, forms.ModelForm):
         return data
 
 
-class AccountForm(forms.ModelForm):
+class AccountForm(SealedModelForm):
     brand = forms.ChoiceField(label="بانک (لوگو و رنگ)", required=False, choices=banks.CHOICES,
                               widget=forms.RadioSelect)
+    name = forms.CharField(label="نام", max_length=60, required=False,
+                           help_text="خالی بگذارید تا اسم بانک گذاشته شود.")
 
     class Meta:
         model = Account
         fields = ["brand", "name", "kind", "archived"]
-        labels = {"name": "نام", "kind": "نوع", "archived": "بایگانی"}
-        help_texts = {"name": "خالی بگذارید تا اسم بانک گذاشته شود."}
+        labels = {"kind": "نوع", "archived": "بایگانی"}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["name"].required = False
         sms_bank = banks.get(self.instance.bank) if self.instance.pk else None
         if self.instance.pk and self.instance.bank:  # SMS accounts stay "bank"
             del self.fields["kind"]

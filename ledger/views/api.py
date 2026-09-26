@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from .. import ingest, security
+from .. import audit, ingest, security
 from ..models import Device, Message, Transaction, User
 
 
@@ -74,7 +74,7 @@ def ingest_view(request):
     texts = [x if isinstance(x, str) else "" for x in items]
 
     results = ingest.ingest(device.user, texts, source, device)
-    Device.objects.filter(pk=device.pk).update(last_used_at=timezone.now())
+    Device.objects.filter(pk=device.pk).update(last_used_at=timezone.now(), last_ip=audit.ip_prefix(ip))
     if len(results) == 1:
         return JsonResponse(results[0], json_dumps_params={"ensure_ascii": False})
     counts = Counter(r["status"] for r in results)
@@ -122,7 +122,7 @@ def metrics(request):
           for s in (Message.PARSED, Message.UNPARSED, Message.IGNORED)),
         "# HELP smsledger_balance_gaps Transactions flagged as having a missed SMS before them.",
         "# TYPE smsledger_balance_gaps gauge",
-        f"smsledger_balance_gaps {Transaction.objects.filter(gap_amount__isnull=False).count()}",
+        f"smsledger_balance_gaps {Transaction.objects.filter(has_gap=True).count()}",
         f"# HELP smsledger_users_silent Users with a device but no SMS for {settings.SILENT_DAYS}+ days.",
         "# TYPE smsledger_users_silent gauge",
         f"smsledger_users_silent {silent}",

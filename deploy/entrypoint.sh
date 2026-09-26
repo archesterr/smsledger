@@ -1,5 +1,6 @@
 #!/bin/sh
-# web: migrate, re-parse unparsed SMS with the parsers in this image, then serve.
+# web: migrate, re-parse unparsed SMS of accounts not yet encrypted (the rest re-parse at their
+# owner's next visit, when their key is available), then serve.
 # anything else: run it (e.g. `docker compose exec app python manage.py invite --note Ali`).
 set -eu
 

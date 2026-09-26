@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .. import security
+from .. import audit, security
 from ..models import Invite, Message, SupportSample, User
 
 
@@ -35,7 +35,7 @@ def staff_home(request):
     ).order_by("-date_joined"))
     unparsed = dict(Message.objects.filter(status=Message.UNPARSED).values_list("user").annotate(n=Count("id")))
     silent_before = timezone.now() - timedelta(days=settings.SILENT_DAYS)
-    rows = [{"u": u, "unparsed": unparsed.get(u.pk, 0),
+    rows = [{"u": u, "unparsed": unparsed.get(u.pk, 0), "vault": u.vault_state,
              "silent": bool(u.n_devices and (u.last_seen is None or u.last_seen < silent_before))} for u in users]
     return render(request, "ledger/staff.html", {
         "nav": "more", "rows": rows,
@@ -73,6 +73,9 @@ def user_toggle(request, pk):
     else:
         u.is_active = not u.is_active
         u.save(update_fields=["is_active"])
+        audit.record(u, "enabled" if u.is_active else "disabled")
+        if not u.is_active:
+            audit.end(u)  # their open sessions end too
         messages.success(request, f"«{u.username}» {'فعال' if u.is_active else 'غیرفعال'} شد.")
     return redirect("staff")
 

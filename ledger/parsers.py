@@ -8,8 +8,13 @@ import hashlib
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from . import jalali
+
+# Changes whenever this file does: each user's unparsed SMS are re-read once with the new parsers
+# (at their next request with their key; see middleware). Nothing else depends on it.
+VERSION = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16]
 
 # Real tz rules, not a fixed +03:30: Iran used DST until 2022, and old SMS get backfilled.
 TEHRAN = jalali.TEHRAN

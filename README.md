@@ -42,9 +42,27 @@ A missed tap is not silent: every supported bank's SMS carries the balance, so t
 
 ## Security model
 
-Built so friends can use one server without seeing each other, and without the operator
-browsing their money by accident.
+Built so friends can use one server without seeing each other, and so that the operator, the
+database and the backups can't read anyone's money.
 
+- **Encrypted per user** ([`ledger/vault.py`](ledger/vault.py)). Amounts, balances, SMS text,
+  titles, counterparties, notes, and account, category and rule names are stored encrypted
+  (AES-256-GCM, each row bound to its table and owner) with a random key per user. That key is
+  stored only wrapped: by the user's password (Argon2id) and by a one-time **recovery key** the
+  user saves at signup. In a logged-in session it sits in the database wrapped with a secret
+  that only the browser's cookie holds, so a database dump or backup alone opens nothing.
+  SMS that arrive while the user is logged out are sealed to their public key (X25519) and
+  recorded at their next login. Still in the clear, because the app needs them in SQL: who owns
+  a row, when a transaction happened, in/out, and which of the user's categories/accounts it's in.
+- **Forgotten password.** Only the user's recovery key brings the data back. A password set by
+  the operator (admin, `changepassword`) locks the data until the user enters their recovery
+  key; without it they can only start over. The operator can't unlock anyone's data.
+- **Security page** (More → امنیت) for each user: a checklist (encryption, recovery key, 2FA,
+  failed logins in 30 days, unused iPhone keys), every signed-in browser with device, network
+  prefix and last activity (sign out one or all others), the iPhone keys with where they last
+  sent from, and an activity log (logins, failures, lockouts, password/2FA/key changes,
+  exports, staff actions). The home page warns about failed logins since the last visit.
+  Network addresses are kept only to the first three parts (`5.120.33.x`).
 - **Invite-only.** Single-use signup links (7 days), created by staff.
 - **Isolation.** Every row has a `user` and every query filters on it; tests try to read/modify
   other users' objects through every URL.
@@ -56,7 +74,9 @@ browsing their money by accident.
 - **Logins.** Argon2 password hashing, case-insensitive usernames, 15-minute lockout after
   10 failures per username or 30 per IP, optional TOTP 2FA with one-time recovery codes. **2FA is mandatory
   for staff**, and Django admin's login is routed through the same 2FA flow.
-- **Browser.** Strict CSP (no inline scripts or styles), HSTS, `__Host-` cookies,
+- **Risky actions ask for the password again**: exporting everything (the CSV isn't encrypted),
+  replacing the recovery key, turning 2FA off, deleting the account.
+- **Browser.** Strict CSP (no inline scripts or styles), HSTS, COOP/CORP, `__Host-` cookies,
   `SameSite=Lax`, CSRF on every form, `Cache-Control: no-store` on every page, frame-busting,
   CSV-injection escaping in exports, no third-party requests (the font is self-hosted).
 - **Operator minimization.** Staff pages show only counts and health (e.g. "3 unparsed SMS").
@@ -66,10 +86,27 @@ browsing their money by accident.
 - **Infra.** App container is non-root, read-only, all capabilities dropped; Postgres sits on an
   internal network with no internet; dependencies are hash-pinned and audited in CI.
 
-**What this is not:** end-to-end encrypted. The server has to read an SMS to parse it, so
-whoever controls the server (you) can technically read the database. Only invite people
-who trust you with that, and protect the server accordingly (SSH keys only, updates,
-encrypted offsite backups whose password lives somewhere else).
+**What this is not:** end-to-end encrypted. iPhone Shortcuts can't encrypt, and the server has
+to read each SMS once to parse it, and a user's data while they use the app. Someone who
+controls the server can change its code to capture that. The encryption protects the database,
+backups, logs and admin screens, not against a malicious operator. So only invite people who
+trust you, and protect the server (SSH keys only, updates, offsite backups whose password
+lives somewhere else).
+
+### Upgrading to encrypted storage
+
+The upgrade (migrations 0003–0006) runs by itself on `docker compose up -d --build`. **Take a
+backup first**: `docker compose exec backup backup run` (or a `pg_dump`).
+
+- Existing data is encrypted right away, with a new key per user. Nobody's password is known
+  during the upgrade, so each key stays readable by the server until **that user's next login**.
+  Their open sessions are signed out once. The next login moves the key under their password
+  and asks them to save a recovery key. The staff page shows who is still "منتظر ورود".
+- Until then those accounts work as before (the phone's SMS are recorded at once).
+- PostgreSQL files are rewritten (`VACUUM FULL`) so the old plaintext columns are gone from the
+  tables. Copies still exist in backups taken before the upgrade and briefly in the database's
+  write-ahead log. For a fully clean disk: after everyone has logged in, prune old snapshots
+  (`restic forget`) and move the database to a fresh volume (`pg_dump` → new volume → restore).
 
 ---
 
@@ -172,8 +209,9 @@ docker compose exec app python manage.py import_legacy /tmp/ledger.db --user <yo
 
 ## Operations
 
-**Updates**: `git pull && docker compose up -d --build`. On start the app runs migrations and
-re-parses every unparsed SMS with the new parsers, so a new bank template fixes old SMS too.
+**Updates**: `git pull && docker compose up -d --build`. On start the app runs migrations. Each
+user's unparsed SMS are re-read with the new parsers at their next visit (the server has no key
+before that), so a new bank template fixes old SMS too.
 
 **Backups** (daily `pg_dump` → [restic](https://restic.net): encrypted, deduplicated, keeps
 7 daily / 4 weekly / 12 monthly, spot-checks 10% of the data each run):
@@ -242,7 +280,7 @@ and unparsed SMS, all on the home page.
 3. The parser's `name` must be a key in `ledger/banks.py` (logo + colour). For a bank not
    listed there: add a `Bank(...)`, put its square SVG logo in `ledger/static/ledger/banks/<key>.svg`,
    and run `python -m ledger.banks` to regenerate `banks.css` (a test checks it's current).
-4. Deploy. Existing unparsed SMS of every user are re-parsed automatically.
+4. Deploy. Each user's unparsed SMS are re-parsed automatically at their next visit.
 
 ---
 

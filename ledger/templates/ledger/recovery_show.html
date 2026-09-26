@@ -1,0 +1,19 @@
+{% extends "ledger/base.html" %}
+{% block title %}کلید بازیابی{% endblock %}
+{% block heading %}کلید بازیابی شما{% endblock %}
+{% block content %}
+<div class="card">
+  <p><b>این کلید فقط همین یک بار نمایش داده می‌شود.</b> آن را یادداشت یا کپی کنید و جای امنی نگه دارید.</p>
+  <code class="recovery" id="rk" dir="ltr">{{ code }}</code>
+  <div class="actions"><button class="btn secondary small" type="button" data-copy="rk">کپی</button></div>
+  <ul class="small muted">
+    <li>اگر رمز عبور را فراموش کنید، یا مدیر آن را عوض کند، با این کلید داده‌هایتان برمی‌گردد.</li>
+    <li>کسی که این کلید و رمز عبور جدید حساب شما را داشته باشد، به داده‌ها دسترسی دارد: آن را به کسی ندهید.</li>
+  </ul>
+</div>
+<form method="post" action="{% url 'recovery_key' %}" class="card" novalidate>{% csrf_token %}
+  <input type="hidden" name="action" value="saved">
+  <div class="field check"><label for="rk-ok"><input type="checkbox" name="confirm" id="rk-ok" required> کلید را جای امنی ذخیره کردم</label></div>
+  <button class="btn" type="submit">ادامه</button>
+</form>
+{% endblock %}

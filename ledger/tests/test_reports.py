@@ -1,7 +1,7 @@
 from ledger import ingest, reports
 from ledger.models import Budget, Category, Transaction
 
-from .helpers import BaseTest, blu, make_user
+from .helpers import BaseTest, blu, find, find_all, make_user
 
 
 class TestReports(BaseTest):
@@ -15,10 +15,12 @@ class TestReports(BaseTest):
             blu(1_000_000, "OUT", 4_000_000, time="12:00"),        # will be an own-account transfer
             blu(500_000, "OUT", 0, time="09:00", jdate="1405.05.10"),  # previous month
         ], "t")
-        self.food = Category.objects.get(user=self.u, name="رستوران و کافه")
+        self.food = find(Category.objects.filter(user=self.u), name="رستوران و کافه")
         self.transfer = Category.objects.get(user=self.u, kind=Category.TRANSFER)
-        Transaction.objects.filter(user=self.u, amount=2_000_000).update(category=self.food)
-        Transaction.objects.filter(user=self.u, amount=1_000_000).update(category=self.transfer)
+        txs = Transaction.objects.filter(user=self.u)
+        Transaction.objects.filter(pk__in=[t.pk for t in find_all(txs, amount=2_000_000)]).update(category=self.food)
+        Transaction.objects.filter(pk__in=[t.pk for t in find_all(txs, amount=1_000_000)]).update(
+            category=self.transfer)
 
     def test_month_totals_exclude_transfers(self):
         t = reports.month_totals(self.u, 1405, 6)

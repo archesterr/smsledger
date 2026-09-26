@@ -1,0 +1,81 @@
+{% extends "ledger/base.html" %}{% load ledger %}
+{% block title %}امنیت{% endblock %}
+{% block heading %}امنیت حساب{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="row between"><b>وضعیت امنیت</b><span><b>{{ score|fa }}</b> از {{ total|fa }}</span></div>
+  <div class="meter{% if score < 3 %} critical{% elif score < total %} warning{% endif %} score-meter" role="meter"
+       aria-valuemin="0" aria-valuemax="{{ total }}" aria-valuenow="{{ score }}" aria-label="وضعیت امنیت"><span class="w-{% widthratio score total 100 %}"></span></div>
+  <ul class="checks">{% for c in checks %}
+    <li class="{% if c.ok %}ok{% else %}todo{% endif %}">
+      <span class="mark" aria-hidden="true">{% if c.ok %}✅{% else %}⚠️{% endif %}</span>
+      <div><b>{{ c.title }}</b><br><span class="small muted">{{ c.text|fa }}</span>
+        {% if c.url and not c.ok %}<br><a class="small" href="{% url c.url %}">درستش کنید ←</a>{% endif %}</div>
+    </li>{% endfor %}
+  </ul>
+  <p class="small muted">رمز عبور: {% if password_age is None %}تاریخ آخرین تغییر ثبت نشده{% else %}{{ password_age|fa }} روز پیش عوض شده{% endif %} ·
+    <a href="{% url 'settings' %}">تغییر رمز</a> · <a href="{% url 'recovery_key' %}">کلید بازیابی</a></p>
+</div>
+
+<div class="section-head"><h2>دستگاه‌هایی که وارد هستند</h2><span class="small muted">{{ sessions|length|fa }} نشست</span></div>
+<div class="card flush"><ul class="list">{% for s in sessions %}
+  <li><div class="item">
+    <span class="ico" aria-hidden="true">{% if "iPhone" in s.agent or "Android" in s.agent %}📱{% elif "iPad" in s.agent %}📲{% else %}💻{% endif %}</span>
+    <span class="main">
+      <span class="t1">{{ s.agent }}{% if s.pk == sid %} <span class="pill ok">همین دستگاه</span>{% endif %}</span>
+      <span class="t2">آخرین فعالیت {{ s.last_seen|ago }} · ورود {{ s.created_at|jday }}{% if s.ip %} · <bdi dir="ltr">{{ s.ip }}</bdi>{% endif %}</span>
+    </span>
+    {% if s.pk != sid %}<form method="post" action="{% url 'session_revoke' s.pk %}" data-confirm="این دستگاه از حساب خارج شود؟">{% csrf_token %}
+      <button class="btn ghost small" type="submit">خروج</button></form>{% endif %}
+  </div></li>{% endfor %}
+</ul></div>
+{% if sessions|length > 1 %}
+<form method="post" action="{% url 'sessions_revoke_others' %}" class="actions" data-confirm="همه دستگاه‌های دیگر از حساب خارج شوند؟">{% csrf_token %}
+  <button class="btn secondary" type="submit">خروج همه دستگاه‌های دیگر</button>
+</form>
+{% endif %}
+<p class="muted small">دستگاهی را نمی‌شناسید؟ خارجش کنید و رمز عبور را عوض کنید. نشانی شبکه فقط تا سه بخش اول نگه داشته می‌شود.</p>
+
+<div class="section-head"><h2>کلیدهای آیفون (ارسال پیامک)</h2><a class="small" href="{% url 'setup' %}">کلید جدید</a></div>
+{% if devices %}
+<div class="card flush"><ul class="list">{% for d in devices %}
+  <li><div class="item">
+    <span class="ico" aria-hidden="true">🔑</span>
+    <span class="main">
+      <span class="t1">{{ d.name }} <span class="muted small mono">{{ d.token_prefix }}…</span>{% if d.stale %} <span class="pill warn">بی‌استفاده</span>{% endif %}</span>
+      <span class="t2">{% if d.last_used_at %}آخرین ارسال {{ d.last_used_at|ago }}{% if d.last_ip %} · <bdi dir="ltr">{{ d.last_ip }}</bdi>{% endif %}{% else %}هنوز استفاده نشده{% endif %}</span>
+    </span>
+    <form method="post" action="{% url 'device_revoke' d.pk %}" data-confirm="این کلید باطل شود؟ آیفونی که از آن استفاده می‌کند دیگر نمی‌تواند پیامک بفرستد.">{% csrf_token %}
+      <input type="hidden" name="back" value="security"><button class="btn ghost small" type="submit">باطل کردن</button></form>
+  </div></li>{% endfor %}
+</ul></div>
+<p class="muted small">این کلیدها فقط می‌توانند پیامک بفرستند؛ نمی‌توانند چیزی بخوانند.</p>
+{% else %}
+<div class="card empty">کلید فعالی ندارید.</div>
+{% endif %}
+
+<div class="section-head"><h2>رویدادهای اخیر</h2></div>
+{% if events %}
+<div class="card flush"><ul class="list events">{% for e in events %}
+  <li class="{% if e.warn %}warn{% endif %}"><div class="item">
+    <span class="ico" aria-hidden="true">{% if e.warn %}⚠️{% else %}•{% endif %}</span>
+    <span class="main"><span class="t1">{{ e.label }}</span>
+      <span class="t2">{{ e.created_at|jday }} · {{ e.created_at|jtime }}{% if e.agent %} · {{ e.agent }}{% endif %}{% if e.ip %} · <bdi dir="ltr">{{ e.ip }}</bdi>{% endif %}</span></span>
+  </div></li>{% endfor %}
+</ul></div>
+{% else %}
+<div class="card empty">هنوز رویدادی ثبت نشده.</div>
+{% endif %}
+
+<details class="card guide">
+  <summary><b>داده‌های من چطور محافظت می‌شود؟</b></summary>
+  <ul class="small">
+    <li>مبلغ‌ها، مانده‌ها، متن پیامک‌ها، توضیح‌ها و نام حساب‌ها و دسته‌ها با کلید مخصوص شما رمزنگاری و ذخیره می‌شوند. این کلید فقط با <b>رمز عبور</b> یا <b>کلید بازیابی</b> شما باز می‌شود.</li>
+    <li>در پایگاه داده و نسخه‌های پشتیبان، این داده‌ها بدون رمز شما خوانا نیستند؛ مدیر سرور هم در صفحه‌های مدیریت آن‌ها را نمی‌بیند.</li>
+    <li>پیامکی که وقتی وارد نیستید می‌رسد، با کلید عمومی شما قفل می‌شود و دفعه بعد که وارد شوید ثبت می‌شود.</li>
+    <li>سرور زمان تراکنش‌ها، دریافت یا پرداخت بودن و دسته‌شان را برای کار کردن برنامه می‌بیند، نه مبلغ و متن را.</li>
+    <li>محدودیت: سرور موقع رسیدن هر پیامک و وقتی از برنامه استفاده می‌کنید داده را باز می‌کند. کسی که کنترل خود سرور را داشته باشد می‌تواند برنامه را تغییر دهد؛ این رمزنگاری از پایگاه داده، پشتیبان‌ها و صفحه‌های مدیریت محافظت می‌کند.</li>
+    <li>اگر رمز را فراموش کنید، فقط کلید بازیابی داده‌ها را برمی‌گرداند. اگر مدیر رمزتان را عوض کند، داده‌ها تا وارد کردن کلید بازیابی قفل می‌ماند.</li>
+  </ul>
+</details>
+{% endblock %}
