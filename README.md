@@ -181,35 +181,46 @@ Everything is explained in Persian inside the app, with the user's own server UR
    = Shortcut Input) → Next → turn off *Ask Before Running* → Done. Each SMS then shows a
    notification to tap. The setup page opens the guide for the phone's iOS version.
 4. **Nightly automation** (recommended): Time of Day 03:00 → Run Shortcut *SMS to Ledger*, no input.
-5. **Old SMS** (**وارد کردن پیامک‌های قدیمی**): iOS lets nothing read existing SMS, so history comes
-   from an iPhone backup: one command on Linux/Mac, a backup file in the browser, or pasting.
-   Duplicates are always ignored.
+5. **Old SMS** (**وارد کردن پیامک‌های قدیمی**, optional): iOS lets nothing read existing SMS, so
+   history comes from an iPhone backup on a computer. The page shows only the way that fits the
+   device it's open on: on the iPhone, "open this on a computer"; on Windows/Mac, Apple's own
+   backup and then **drag the backup folder onto the page**; on Linux, one pasted command. The
+   period (Shamsi month boundaries) is picked on the page first. Duplicates are always ignored.
+
+The setup page is a wizard: one step at a time with a "next" button (the step is kept in the
+address as `#step-N`, so coming back from the Shortcuts app keeps the place). It opens where the
+account is: at Connect right after the tap, at the automation step once a phone is connected, at
+the finish screen once SMS arrive. Without JavaScript all steps show, one under the other.
 
 ### Old SMS: one command on a Linux or Mac computer
 
 iOS gives no app or Shortcut access to SMS already on the phone; a backup is the only way out.
-**وارد کردن پیامک‌های قدیمی → ساخت دستور** gives a command to paste into a terminal:
+**وارد کردن پیامک‌های قدیمی → ساخت دستور** gives a command to paste into a terminal, with the
+period picked on the page in it:
 
 ```bash
-python3 -c "import urllib.request as u; exec(u.urlopen('https://SERVER/sync.py').read())" sml_…
+python3 -c "import urllib.request as u; exec(u.urlopen('https://SERVER/sync.py').read())" sml_… --period year
 ```
 
-(Only `python3` is needed: no curl, and the terminal stays free for its questions.)
+Only `python3` is needed (no curl), and **it asks nothing**: the only things the user may do are
+type the computer's password (sudo, when a system package is missing) and tap Trust on the
+iPhone. The import page polls `/import/sync/<id>/` and says when the command is done and how many
+SMS arrived.
 
 [`ledger/sync_client.py`](ledger/sync_client.py) (standard library only; served at `/sync.py` with
 the server's address, the Shamsi periods and the OTP filter filled in) then, on that computer:
 
 1. installs [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) into its own virtualenv
-   under `~/.local/share/smsledger-sync` (first run: ~350 MB, wheels only; it offers
-   `sudo apt-get install python3-venv usbmuxd` if those are missing);
+   under `~/.local/share/smsledger-sync` (first run: ~350 MB, wheels only; it runs
+   `sudo apt-get install python3-venv usbmuxd` itself if those are missing);
 2. waits for the iPhone on USB and runs `backup2 backup --only sms`: the phone still streams its
    whole backup the first time (10-60 min), but **only `sms.db` is written to disk**, and later runs
    are incremental (a minute or two). Pairing is the usual "Trust This Computer?" + passcode;
 3. reads the bank SMS locally with the same rules as the browser reader below, decrypting with
    pyiosbackup if the backups are encrypted (the password is asked with `getpass` and piped, never
    on a command line);
-4. lists senders (mobile numbers unticked) and the count per period, asks, and posts the chosen SMS
-   to `/ingest` as `{"items": [{"text", "at"}]}`, 200 per request, then `?source=done`.
+4. leaves out mobile numbers and emails (people, not banks) and SMS before the period, and posts
+   the rest to `/ingest` as `{"items": [{"text", "at"}]}`, 200 per request, then `?source=done`.
 
 The key is a `Device` with `expires_at` (24 h): it can only add SMS like a phone's, it's revoked by
 `?source=done` or by making a new command, and it isn't a phone (setup page, silent-phone checks).
@@ -220,9 +231,16 @@ many are left, so a years-long backup never hits the worker timeout.
 `--db PATH` skips the iPhone and reads an existing `sms.db`, backup folder, or a Mac's
 `~/Library/Messages/chat.db`; `--period` and `--yes` skip the questions.
 
-### Old SMS from an iPhone backup file (any computer)
+### Old SMS from an iPhone backup folder (Windows, Mac)
 
-The import page also reads the backup's message database (`sms.db`, stored in a backup as
+The user makes a normal backup with Apple Devices (Windows; the page links it in the Microsoft
+Store) or Finder (Mac), opens the backup folder with Win+R / ⇧⌘G and a path the page copies, and
+drags the folder onto the page. The page walks the dropped folder with the File and Directory
+Entries API to `<device>/3d/3d0d7e…` (the dropped folder may be one device's backup, the `Backup`
+folder holding several, where the newest wins, or `MobileSync`) without listing the whole backup.
+A single `sms.db` can still be picked as a file.
+
+The import page reads the backup's message database (`sms.db`, stored in a backup as
 `3d0d7e5fb2ce288813306e4d4636395e047a3d28`) **in the browser**, with SQLite compiled to
 WebAssembly ([sql.js](ledger/static/ledger/vendor/sqljs/SOURCE), vendored; the page's CSP adds
 `'wasm-unsafe-eval'` for it and nothing else). The user picks a period (last month, last 3

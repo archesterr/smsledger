@@ -1,0 +1,30 @@
+<div class="card" id="sync">
+  {% if sync %}
+  <ol class="steps">
+    <li><b>آیفون را با کابل به رایانه وصل کنید</b> و قفلش را باز کنید.</li>
+    <li><b>ترمینال را باز کنید:</b> کلیدهای <span dir="ltr"><kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd></span> را با هم بزنید.</li>
+    <li><b>این دستور را کپی کنید</b>، در ترمینال با <span dir="ltr"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>V</kbd></span> بچسبانید و <kbd>Enter</kbd> بزنید:
+      <code class="token" id="sync-cmd">{{ sync.command }}</code>
+      <button class="btn block" type="button" data-copy="sync-cmd">کپی دستور</button></li>
+    <li><b>اگر رمز خواست</b>، رمز <b>همین رایانه</b> را بنویسید و <kbd>Enter</kbd> (موقع نوشتن چیزی دیده نمی‌شود؛ عادی است).
+      <b>اگر آیفون پرسید <bdi>Trust This Computer?</bdi></b>، <b>Trust</b> را بزنید و رمز گوشی را بدهید.</li>
+    <li><b>صبر کنید</b> و این صفحه را باز بگذارید. بار اول ۱۰ تا ۶۰ دقیقه طول می‌کشد (دفعه‌های بعد یکی دو دقیقه). وقتی تمام شد، همین‌جا خبر می‌دهد.</li>
+  </ol>
+  <div class="alert warning" id="sync-status" data-url="{% url 'import_sync_status' sync.device.pk %}" aria-live="polite">
+    <span class="ico">⏳</span><div class="js-text">منتظر اجرای دستور…</div></div>
+  <p class="muted small">کلید داخل دستور فقط می‌تواند پیامک اضافه کند، ۲۴ ساعت کار می‌کند و بعد از ارسال باطل می‌شود. هیچ سؤالی در ترمینال پرسیده نمی‌شود.</p>
+  {% else %}
+  <p>روی رایانه لینوکس (مثل اوبونتو) یا مک، یک دستور همه کار را خودش انجام می‌دهد؛ نصب هیچ برنامه‌ای لازم نیست. دکمه را بزنید تا دستور مخصوص شما ساخته شود:</p>
+  {% endif %}
+  <form id="sync-form" method="post" action="{% url 'import_sync' %}#sync">{% csrf_token %}
+    <button class="btn block{% if sync %} secondary{% endif %}" type="submit">{% if sync %}ساخت دستور تازه (برای بازه دیگر){% else %}ساخت دستور{% endif %}</button>
+  </form>
+  <details class="table-view"><summary>دستور چه می‌کند؟</summary>
+    <ul class="small">
+      <li>بار اول ابزار پشتیبان‌گیری آیفون را در پوشه جداگانه‌ای نصب می‌کند (حدود ۳۵۰ مگابایت). اگر بسته‌ای از سیستم کم باشد، خودش نصبش می‌کند؛ برای همین ممکن است رمز رایانه را بخواهد.</li>
+      <li>از آیفون پشتیبان می‌گیرد و روی رایانه <b>فقط فایل پیامک‌ها</b> را نگه می‌دارد.</li>
+      <li>پیامک‌های بانک بازه‌ای را که بالا انتخاب کردید جدا می‌کند و فقط همان‌ها را می‌فرستد؛ شماره موبایل‌ها و رمزهای پویا فرستاده نمی‌شوند.</li>
+      <li>اگر برای پشتیبان‌های آیفون رمز گذاشته‌اید، فقط همان را می‌پرسد.</li>
+    </ul>
+  </details>
+</div>

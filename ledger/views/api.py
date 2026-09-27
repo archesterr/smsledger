@@ -80,6 +80,8 @@ def ingest_view(request):
             "به صفحه راه‌اندازی برگردید و اتوماسیون پیامک را بسازید.")},
             json_dumps_params={"ensure_ascii": False})
     if source == "done":
+        # the import page, still open on the computer, sees this and shows the result
+        _touch(device, ip)
         if device.expires_at:
             Device.objects.filter(pk=device.pk).update(revoked_at=timezone.now())
         return JsonResponse({"status": "done"})

@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from .. import audit, charts, ingest, jalali, money, parsers, reports, rules, security, shortcut
 from ..forms import (
@@ -452,19 +452,46 @@ def import_sms(request):
     return import_page(request, form=form, result=result)
 
 
-def import_page(request, form=None, result=None, sync_command=None):
+def computer_kind(request) -> str:
+    """Which way to old SMS fits the device this page is open on: "phone" (none: it needs a
+    computer), "windows" / "mac" (Apple's own backup, read in the browser) or "linux" (the command)."""
+    ua = request.headers.get("User-Agent", "")
+    if any(k in ua for k in ("iPhone", "iPad", "Android")):
+        return "phone"
+    if "Windows" in ua:
+        return "windows"
+    if "Macintosh" in ua or "Mac OS X" in ua:
+        return "mac"
+    if "Linux" in ua or "X11" in ua:
+        return "linux"
+    return "windows"  # the most common computer
+
+
+def import_page(request, form=None, result=None, sync=None):
+    kind = computer_kind(request)
+    periods = import_periods()
+    picked = sync["period"] if sync else request.GET.get("period", "year")
+    for p in periods:
+        p["picked"] = p["key"] == picked
+    if not any(p["picked"] for p in periods):
+        periods[2]["picked"] = True
     return render(request, "ledger/import.html", {
-        "nav": "more", "form": form or ImportForm(), "result": result, "periods": import_periods(),
-        "otp_pattern": shortcut.OTP_PATTERN, "sync_command": sync_command,
+        "nav": "more", "form": form or ImportForm(), "result": result, "periods": periods,
+        "otp_pattern": shortcut.OTP_PATTERN, "sync": sync, "kind": kind,
+        # the way that fits this computer first; the other one folded away under it
+        "ways": ["command", "backup"] if kind == "linux" else ["backup", "command"],
+        "import_url": request.build_absolute_uri(reverse("import")),
     })
 
 
 SYNC_KEY_HOURS = 24
 
 
-def sync_command(script_url: str, token: str) -> str:
-    """Only python3 is needed (curl isn't on every Ubuntu), and stdin stays the terminal for questions."""
-    return f"python3 -c \"import urllib.request as u; exec(u.urlopen('{script_url}').read())\" {token}"
+def sync_command(script_url: str, token: str, period: str = "all") -> str:
+    """Only python3 is needed (curl isn't on every Ubuntu). The period rides along, so the
+    terminal asks nothing."""
+    fetch = f"import urllib.request as u; exec(u.urlopen('{script_url}').read())"
+    return f'python3 -c "{fetch}" {token} --period {period}'
 
 
 @require_POST
@@ -473,13 +500,25 @@ def import_sync_key(request):
     works for a day, and the script revokes it when it's done. Shown in this response only: the
     DB keeps just the hash."""
     u = request.user
+    periods = {p["key"] for p in import_periods()}
+    period = request.POST.get("period") if request.POST.get("period") in periods else "all"
     token, now = security.new_token(), timezone.now()
     with transaction.atomic():
         u.devices.live().filter(expires_at__isnull=False).update(revoked_at=now)  # one command at a time
-        Device.objects.create(user=u, name="رایانه · پیامک‌های قدیمی", token_hash=security.sha256(token),
-                              token_prefix=token[:8], expires_at=now + timedelta(hours=SYNC_KEY_HOURS))
+        device = Device.objects.create(user=u, name="رایانه · پیامک‌های قدیمی", token_hash=security.sha256(token),
+                                       token_prefix=token[:8], expires_at=now + timedelta(hours=SYNC_KEY_HOURS))
     audit.record(u, "sync_key", request)
-    return import_page(request, sync_command=sync_command(request.build_absolute_uri(reverse("sync_script")), token))
+    command = sync_command(request.build_absolute_uri(reverse("sync_script")), token, period)
+    return import_page(request, sync={"command": command, "period": period, "device": device})
+
+
+@require_GET
+def import_sync_status(request, pk):
+    """Polled by the import page while the command runs on the same computer."""
+    d = get_object_or_404(Device, pk=pk, user=request.user, expires_at__isnull=False)
+    sent = Message.objects.filter(device=d).count()
+    return JsonResponse({"started": d.last_used_at is not None,
+                         "done": d.revoked_at is not None and d.last_used_at is not None, "sent": sent})
 
 
 @require_POST

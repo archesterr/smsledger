@@ -78,18 +78,36 @@ class TestSyncKey(BaseTest):
 
     def test_command_is_shown_once_with_a_one_day_key(self):
         self.assertNotIn("sml_", self.client.get("/import/").content.decode())
-        r = self.client.post("/import/sync/")
-        cmd = r.context["sync_command"]
+        r = self.client.post("/import/sync/", {"period": "3months"})
+        cmd = r.context["sync"]["command"]
         self.assertTrue(cmd.startswith(
             """python3 -c "import urllib.request as u; exec(u.urlopen('http://testserver/sync.py').read())" sml_"""))
+        self.assertTrue(cmd.endswith(" --period 3months"))
         self.assertIn('id="sync-cmd"', r.content.decode())
         d = Device.objects.get()
-        self.assertEqual(d.token_prefix, cmd.split()[-1][:8])
+        self.assertEqual(d.token_prefix, cmd.split()[-3][:8])
+        self.assertTrue(self.client.post("/import/sync/", {"period": "junk"}).context["sync"]["command"]
+                        .endswith(" --period all"))
         self.assertAlmostEqual((d.expires_at - timezone.now()).total_seconds(), 24 * 3600, delta=60)
         self.assertTrue(SecurityEvent.objects.filter(user=self.user, kind="sync_key").exists())
-        self.client.post("/import/sync/")  # a new command replaces the old one
+        self.client.post("/import/sync/")  # a new command replaces the old ones
         self.assertEqual(Device.objects.live().count(), 1)
-        self.assertEqual(Device.objects.filter(revoked_at__isnull=False).count(), 1)
+        self.assertEqual(Device.objects.filter(revoked_at__isnull=False).count(), 2)
+
+    def test_the_page_shows_when_the_command_is_done(self):
+        d = self.client.post("/import/sync/").context["sync"]["device"]
+        url = f"/import/sync/{d.pk}/"
+        self.assertEqual(self.client.get(url).json(), {"started": False, "done": False, "sent": 0})
+        token_device, token = make_device(self.user, "phone")
+        ingest.ingest(self.user, [blu(100, balance=900)], "backup", d)
+        Device.objects.filter(pk=d.pk).update(last_used_at=timezone.now())
+        self.assertEqual(self.client.get(url).json(), {"started": True, "done": False, "sent": 1})
+        Device.objects.filter(pk=d.pk).update(revoked_at=timezone.now())
+        self.assertEqual(self.client.get(url).json(), {"started": True, "done": True, "sent": 1})
+        self.assertEqual(self.client.get(f"/import/sync/{token_device.pk}/").status_code, 404)  # phones: no
+        other = make_user("other")
+        self.login(other)
+        self.assertEqual(self.client.get(url).status_code, 404)
 
     def test_computer_keys_are_not_phones(self):
         self.client.post("/import/sync/")
@@ -209,10 +227,10 @@ class TestClientReading(BaseTest):
         self.assertEqual([m["sender"] for m in sms], ["BluBank", "+98700717", "+989121234567", "BluBank"])
         self.assertIn("آرمین آرمین", sms[-1]["text"])  # decoded from attributedBody
         self.assertEqual(sms[-1]["at"], ms(self.now - timedelta(days=3)))
-        senders = sync_client.senders_of(sms)
-        self.assertEqual({s: v["on"] for s, v in senders.items()},
-                         {"BluBank": True, "+98700717": True, "+989121234567": False})
-        self.assertEqual(senders["BluBank"]["n"], 2)
+        self.assertEqual({m["sender"]: sync_client.is_person(m["sender"]) for m in sms},
+                         {"BluBank": False, "+98700717": False, "+989121234567": True})
+        self.assertTrue(sync_client.is_person("friend@icloud.com"))
+        self.assertTrue(sync_client.is_person("0912 123 4567"))
 
     def test_old_ios_seconds_and_short_texts(self):
         in_2016 = (978307200 + 500_000_000) * 1000
@@ -263,15 +281,15 @@ class TestClientEndToEnd(LiveServerTestCase):
         Device.objects.filter(pk=device.pk).update(expires_at=timezone.now() + timedelta(hours=24))
         return token
 
-    def run_script(self, *args, answers=None):
+    def run_script(self, *args):
         env = {**os.environ, "XDG_DATA_HOME": str(self.tmp / "data")}
-        return subprocess.run([sys.executable, str(self.script), *args], input=answers, capture_output=True,
-                              text=True, timeout=120, env=env)
+        return subprocess.run([sys.executable, str(self.script), *args], stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=120, env=env)
 
     def test_the_page_command_sends_the_bank_sms_and_revokes_its_key(self):
         # exactly what the import page shows, in a shell, as the user pastes it
         cmd = app.sync_command(f"{self.live_server_url}/sync.py", self.key())
-        r = subprocess.run(["sh", "-c", f"{cmd} --db '{self.db}' --period all --yes"], capture_output=True,
+        r = subprocess.run(["sh", "-c", f"{cmd} --db '{self.db}'"], capture_output=True, stdin=subprocess.DEVNULL,
                            text=True, timeout=120, env={**os.environ, "XDG_DATA_HOME": str(self.tmp / "data")})
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("Done: 3 new, 0 already there", r.stdout)
@@ -281,26 +299,30 @@ class TestClientEndToEnd(LiveServerTestCase):
         vault.keyring()[self.user.pk] = self.dek  # the owner opens the app
         self.assertEqual(ingest.process_pending(self.user), 3)
         self.assertEqual(Transaction.objects.count(), 3)
-        again = self.run_script(self.key(), "--db", str(self.db), "--yes")
+        again = self.run_script(self.key(), "--db", str(self.db))
         self.assertIn("Done: 0 new, 3 already there", again.stdout)
 
-    def test_asks_senders_and_period(self):
-        # untick nothing, pick "last month": only the SMS from 3 days ago; confirm
-        r = self.run_script(self.key(), "--db", str(self.db), answers="\n1\ny\n")
+    def test_the_period_from_the_page_and_no_questions(self):
+        # "last month": only the SMS from 3 days ago; the mobile number's SMS is never sent
+        r = self.run_script(self.key(), "--db", str(self.db), "--period", "month")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("[ ]", r.stdout)  # the mobile number starts unticked
-        self.assertIn("Send 1 SMS (Last month", r.stdout)
+        self.assertIn("1 bank SMS to send", r.stdout)
         self.assertEqual(Message.objects.count(), 1)
+        self.assertEqual(Device.objects.live().count(), 0)
 
-    def test_no_terminal_no_guessing(self):
-        r = self.run_script(self.key(), "--db", str(self.db), answers="")
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("no terminal", r.stdout)
-        self.assertFalse(Message.objects.exists())
+    def test_nothing_in_the_period_still_finishes(self):
+        db = make_sms_db(self.tmp / "old.db", [("BluBank", blu(1, balance=1), None, self.now - timedelta(days=900),
+                                                 "SMS", 0)])
+        r = self.run_script(self.key(), "--db", str(db), "--period", "month")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Nothing to send", r.stdout)
+        d = Device.objects.get()
+        self.assertIsNotNone(d.revoked_at)  # the page sees it finished
+        self.assertIsNotNone(d.last_used_at)
 
     def test_expired_key_says_what_to_do(self):
         token = self.key()
         Device.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
-        r = self.run_script(token, "--db", str(self.db), "--yes")
+        r = self.run_script(token, "--db", str(self.db))
         self.assertEqual(r.returncode, 1)
         self.assertIn("Make a new command", r.stdout)

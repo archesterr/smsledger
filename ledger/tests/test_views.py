@@ -227,6 +227,18 @@ class TestPages(BaseTest):
         self.client.logout()
         self.assertEqual(self.post_sms(token, {"sms": blu(9, balance=9)}).json()["status"], "received")
 
+    def test_setup_wizard_opens_where_the_account_is(self):
+        Device.objects.filter(user=self.u).delete()
+        Message.objects.filter(user=self.u).delete()
+        self.assertEqual(self.client.get("/setup/").context["start_step"], 1)
+        self.assertEqual(self.client.post("/setup/", {"name": ""}).context["start_step"], 2)  # Connect tapped
+        Device.objects.filter(user=self.u).update(last_used_at=timezone.now())
+        page = self.client.get("/setup/")
+        self.assertEqual(page.context["start_step"], 3)
+        self.assertContains(page, 'data-start="3"')
+        ingest.ingest(self.u, [blu(1, balance=1)], "test")
+        self.assertEqual(self.client.get("/setup/").context["start_step"], 6)
+
     def test_setup_opens_the_guide_for_the_phones_ios(self):
         ua16 = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_7_16 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
         ua17 = ua16.replace("16_7_16", "17_5")

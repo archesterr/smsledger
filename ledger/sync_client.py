@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """SMS Ledger: send the bank SMS already on an iPhone to the ledger, from a Linux or Mac computer.
 
-The app's import page («وارد کردن پیامک») gives the command, with a one-off key in it:
-    python3 -c "import urllib.request as u; exec(u.urlopen('https://SERVER/sync.py').read())" sml_...
+The app's import page («وارد کردن پیامک») gives the command, with a one-off key and the period
+the user picked in it:
+    python3 -c "import urllib.request as u; exec(u.urlopen('https://SERVER/sync.py').read())" sml_... --period year
+
+It asks nothing: the only things the user may have to do are type the computer's password (when a
+system package is missing) and tap Trust on the iPhone.
 
 Everything below happens on this computer:
   1. pymobiledevice3 is installed in its own folder (first run only).
@@ -10,7 +14,7 @@ Everything below happens on this computer:
      phone is written to disk. The first run still reads the whole phone (iOS offers no other way
      to reach old SMS), so it takes a while; later runs only fetch what changed.
   3. Bank SMS are picked out: SMS (not iMessage) that mention a balance («موجودی» / «مانده»),
-     never one-time codes. You choose the senders and the period.
+     not from a mobile number (people, not banks), never one-time codes, in the chosen period.
   4. Only those are sent, with a key that can only add SMS. The key is revoked at the end.
 Personal messages never leave this computer.
 
@@ -60,31 +64,20 @@ def step(text: str) -> None:
     say(f"\n==> {text}")
 
 
-def ask(prompt: str) -> str:
-    try:
-        return input(prompt).strip()
-    except EOFError:
-        raise Stop("There's no terminal to answer questions in. Run the command exactly as the import page\n"
-                   "shows it, in a terminal, or add --yes to send with the default choices.") from None
-
-
-def yes(prompt: str, default: bool = True) -> bool:
-    answer = ask(f"{prompt} [{'Y/n' if default else 'y/N'}] ").lower()
-    return default if not answer else answer.startswith("y")
-
-
 def num(n: int) -> str:
     return f"{n:,}"
 
 
 # ---- the backup tool ------------------------------------------------------------------------------
-def apt_install(packages: list[str]) -> bool:
+def apt_install(packages: list[str]) -> None:
+    """No question first: the user ran this to get it done. sudo asks for the password itself."""
+    names = " ".join(packages)
     if not shutil.which("apt-get"):
-        return False
-    say(f"This needs the system package(s): {' '.join(packages)}")
-    if not yes("Install with sudo apt-get now?"):
-        return False
-    return subprocess.run(["sudo", "apt-get", "install", "-y", *packages]).returncode == 0
+        raise Stop(f"Please install {names} with this computer's software installer, then run the command again.")
+    say(f"Installing {names} (needed to talk to the iPhone).\n"
+        "If asked for a password: type THIS COMPUTER's password (nothing shows while typing) and press Enter.")
+    if subprocess.run(["sudo", "apt-get", "install", "-y", *packages]).returncode:
+        raise Stop(f"Installing {names} didn't work (see above). Check the internet and run the command again.")
 
 
 def tool() -> Path:
@@ -98,8 +91,8 @@ def tool() -> Path:
         HOME.mkdir(parents=True, exist_ok=True)
         if subprocess.run([sys.executable, "-m", "venv", str(venv)]).returncode != 0:
             shutil.rmtree(venv, ignore_errors=True)  # Debian/Ubuntu ship venv separately
-            if not apt_install(["python3-venv"]) or \
-                    subprocess.run([sys.executable, "-m", "venv", str(venv)]).returncode != 0:
+            apt_install(["python3-venv", *(["usbmuxd"] if usbmuxd_missing() else [])])  # one password prompt
+            if subprocess.run([sys.executable, "-m", "venv", str(venv)]).returncode != 0:
                 raise Stop("Could not create a Python virtualenv. On Ubuntu: sudo apt install python3-venv")
     pip = [str(venv / "bin" / "python"), "-m", "pip", "install", "--disable-pip-version-check", "-q"]
     if subprocess.run([*pip, TOOL]).returncode != 0:
@@ -127,8 +120,7 @@ def wait_for_iphone(exe: Path) -> str:
             say(f"Found the iPhone ({found[0]}).")
             return found[0]
         if r.returncode != 0 and usbmuxd_missing():
-            if not apt_install(["usbmuxd"]):
-                raise Stop("usbmuxd is needed to talk to the iPhone. On Ubuntu: sudo apt install usbmuxd")
+            apt_install(["usbmuxd"])
             continue
         if waited == 0:
             say("Waiting for the iPhone… (Ctrl+C to stop)")
@@ -253,40 +245,9 @@ def read_bank_sms(path: Path, otp: re.Pattern) -> tuple[int, list[dict]]:
 
 
 # ---- choosing -------------------------------------------------------------------------------------
-def senders_of(sms: list[dict]) -> dict[str, dict]:
-    out: dict[str, dict] = {}
-    for m in sms:
-        s = out.setdefault(m["sender"], {"n": 0, "on": not MOBILE.match(re.sub(r"[\s-]", "", m["sender"]))
-                                         and "@" not in m["sender"]})
-        s["n"] += 1
-        s["sample"] = m["text"].split("\n")[0][:40]  # the newest wins
-    return out
-
-
-def pick_senders(senders: dict[str, dict]) -> None:
-    names = sorted(senders, key=lambda s: -senders[s]["n"])
-    while True:
-        say("\nSenders (only ticked ones are sent; mobile numbers start unticked):")
-        for i, s in enumerate(names, 1):
-            info = senders[s]
-            say(f"  [{'x' if info['on'] else ' '}] {i:>2}  {s:<16} {num(info['n']):>7}   {info['sample']}")
-        answer = ask("Type numbers to tick/untick (e.g. 2 5), or press Enter to continue: ")
-        if not answer:
-            return
-        for token in re.split(r"[\s,]+", answer):
-            if token.isdigit() and 1 <= int(token) <= len(names):
-                s = senders[names[int(token) - 1]]
-                s["on"] = not s["on"]
-
-
-def pick_period(sms: list[dict], periods: list[dict]) -> dict:
-    say("\nWhich SMS?")
-    for i, p in enumerate(periods, 1):
-        say(f"  {i}) {p['en']:<36} {num(sum(m['at'] >= p['start'] for m in sms)):>7}")
-    while True:
-        answer = ask(f"Choose 1-{len(periods)} [{len(periods)}]: ") or str(len(periods))
-        if answer.isdigit() and 1 <= int(answer) <= len(periods):
-            return periods[int(answer) - 1]
+def is_person(sender: str) -> bool:
+    """A mobile number or an email: someone who mentioned a balance, not a bank."""
+    return bool(MOBILE.match(re.sub(r"[\s-]", "", sender))) or "@" in sender
 
 
 # ---- sending --------------------------------------------------------------------------------------
@@ -334,17 +295,18 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="sync.py", description="Send the bank SMS on an iPhone to SMS Ledger.")
     # run as `python3 -c "…exec(…)" KEY` (the import page's command) or as a file: argv[1:] either way
     ap.add_argument("key", help="the one-off key from the app's import page (sml_...)")
+    ap.add_argument("--period", choices=[p["key"] for p in CONFIG["periods"]], default="all",
+                    help="which SMS to send (the import page puts the one picked there)")
     ap.add_argument("--db", type=Path, help="an existing sms.db, chat.db or iPhone backup folder (no iPhone needed)")
-    ap.add_argument("--period", choices=[p["key"] for p in CONFIG["periods"]], help="skip the period question")
-    ap.add_argument("--yes", action="store_true", help="don't ask: default senders, send at once")
     args = ap.parse_args(argv)
     if sys.version_info < (3, 9):
         raise Stop("This needs Python 3.9 or newer (Ubuntu 22.04 or later).")
     if not args.key.startswith("sml_"):
         ap.error("the key starts with sml_ (copy the whole command from the import page)")
+    period = {p["key"]: p for p in CONFIG["periods"]}[args.period]
 
-    say(f"SMS Ledger: old SMS from an iPhone -> {CONFIG['server']}")
-    say("Personal messages stay on this computer; only the bank SMS you choose are sent.")
+    say(f"SMS Ledger: old bank SMS from an iPhone -> {CONFIG['server']}  ({period['en']})")
+    say("Personal messages stay on this computer. Nothing to answer: just follow what it says.")
     temp = False
     try:
         if args.db:
@@ -357,33 +319,22 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if temp:
             os.unlink(path)
-    say(f"{num(scanned)} messages read; {num(len(sms))} bank SMS found.")
-    if not sms:
-        say("Nothing to send: no SMS with «موجودی» or «مانده» in them.")
-        return 0
-
-    senders = senders_of(sms)
-    if not args.yes:
-        pick_senders(senders)
-    periods = {p["key"]: p for p in CONFIG["periods"]}
-    period = periods[args.period] if args.period else periods["all"] if args.yes else \
-        pick_period(sms, CONFIG["periods"])
-    chosen = [m for m in sms if m["at"] >= period["start"] and senders[m["sender"]]["on"]]
+    chosen = [m for m in sms if m["at"] >= period["start"] and not is_person(m["sender"])]
+    say(f"{num(scanned)} messages read; {num(len(chosen))} bank SMS to send.")
     if not chosen:
-        say("No SMS from the ticked senders in that period.")
-        return 0
-    if not args.yes and not yes(f"\nSend {num(len(chosen))} SMS ({period['en']})?"):
+        say("Nothing to send: no bank SMS (with «موجودی» or «مانده») in that period.")
+        post(CONFIG["server"].rstrip("/") + "/ingest?source=done", args.key, None)
         return 0
 
     step("Sending")
     counts = send(chosen, args.key)
     new = counts.get("received", 0) + counts.get("created", 0) + counts.get("unparsed", 0)
-    say(f"Done: {num(new)} new, {num(counts.get('duplicate', 0))} already there, "
+    say(f"\nDone: {num(new)} new, {num(counts.get('duplicate', 0))} already there, "
         f"{num(counts.get('ignored', 0))} skipped (one-time codes).")
-    say(f"\nOpen {CONFIG['server']} and sign in: the SMS become transactions when the app opens.")
+    say("Go back to the browser: the import page shows them. You can close this window.")
     if not args.db:
-        say(f"The messages-only backup stays in {HOME / 'backup'} so the next run is quick.\n"
-            f"To remove everything this command installed: rm -rf {HOME}")
+        say(f"\n(The messages-only backup stays in {HOME / 'backup'} so next time is quick.\n"
+            f" To remove everything this command installed: rm -rf {HOME})")
     return 0
 
 

@@ -43,6 +43,7 @@ urlpatterns = [
     path("import/", app.import_sms, name="import"),
     path("import/batch/", app.import_batch, name="import_batch"),
     path("import/sync/", app.import_sync_key, name="import_sync"),
+    path("import/sync/<int:pk>/", app.import_sync_status, name="import_sync_status"),
     path("messages/", app.messages_list, name="messages"),
     path("messages/<int:pk>/delete/", app.message_delete, name="message_delete"),
     path("messages/<int:pk>/share/", app.message_share, name="message_share"),

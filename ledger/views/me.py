@@ -46,14 +46,17 @@ def setup(request):
         new_token = token  # shown once, in this response only; the DB keeps just the hash
         form = DeviceForm()
     devices = u.devices.phones().filter(revoked_at__isnull=True).order_by("-created_at")
+    connected = devices.filter(last_used_at__isnull=False).exists()
+    has_sms = u.messages.exists()
+    # where the wizard opens: the Connect tap just made a key, or how far this account already got
+    start_step = 2 if new_device else 6 if has_sms else 3 if connected else 1
     return render(request, "ledger/setup.html", {
         "nav": "more", "form": form, "new_token": new_token, "new_device": new_device, "devices": devices,
         "connect_url": shortcut.connect_url(new_token) if new_token else None,
         "ingest_url": request.build_absolute_uri("/ingest"),
         "shortcut_url": settings.SHORTCUT_URL, "shortcut_name": shortcut.NAME,
         "otp_pattern": shortcut.OTP_PATTERN,
-        "connected": devices.filter(last_used_at__isnull=False).exists(),
-        "has_sms": u.messages.exists(),
+        "connected": connected, "has_sms": has_sms, "start_step": start_step,
         "ios": ios,
         # opened on a computer: the Connect button only works on the iPhone itself
         "phone_qr": None if ios else segno.make(request.build_absolute_uri(request.path), error="m").svg_inline(

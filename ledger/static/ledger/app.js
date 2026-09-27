@@ -61,10 +61,41 @@
           statusBox.querySelector(".js-connected").classList.remove("hidden");
           var seen = document.getElementById("device-" + statusBox.dataset.deviceId + "-seen");
           if (seen) seen.textContent = "وصل شد، همین الان";
+          document.dispatchEvent(new CustomEvent("device-connected"));
         }).catch(function () {});
     };
     timer = setInterval(check, 3000);
     document.addEventListener("visibilitychange", check);
+  }
+
+  // Setup: one step at a time. The step lives in the address (#step-3), so coming back from the
+  // Shortcuts app or reloading keeps the place.
+  var wizard = document.querySelector(".wizard");
+  if (wizard) {
+    var steps = wizard.querySelectorAll(".wizard-step"), last = steps.length;
+    var head = wizard.querySelector(".wizard-head");
+    var show = function (n, scroll) {
+      n = Math.max(1, Math.min(last, n));
+      steps.forEach(function (s) { s.classList.toggle("hidden", Number(s.dataset.step) !== n); });
+      var shown = Math.min(n, last - 1);  // the last "step" is the finish screen
+      head.classList.toggle("hidden", n === last);
+      head.querySelector(".js-count").textContent = "قدم " + toFa(shown) + " از " + toFa(last - 1);
+      head.querySelector(".progress i").style.width = Math.round(100 * shown / (last - 1)) + "%";
+      if (history.replaceState) history.replaceState(null, "", "#step-" + n);
+      if (scroll) window.scrollTo(0, 0);
+      wizard.dataset.at = n;
+    };
+    wizard.querySelectorAll(".wizard-nav").forEach(function (nav) { nav.classList.remove("hidden"); });
+    wizard.addEventListener("click", function (e) {
+      var at = Number(wizard.dataset.at);
+      if (e.target.closest(".js-next")) show(at + 1, true);
+      else if (e.target.closest(".js-back")) show(at === last ? 1 : at - 1, true);
+    });
+    document.addEventListener("device-connected", function () {
+      if (Number(wizard.dataset.at) === 2) setTimeout(function () { show(3, true); }, 1500);
+    });
+    var fromHash = /^#step-(\d)$/.exec(location.hash);
+    show(wizard.dataset.force || !fromHash ? Number(wizard.dataset.start) : Number(fromHash[1]), false);
   }
 
   // Inbox: categorize with one tap, no page reload.

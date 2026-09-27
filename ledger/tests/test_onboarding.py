@@ -48,8 +48,7 @@ class TestInvite(BaseTest):
         path = self.client.get("/staff/").context["new_link"].split("testserver", 1)[1]
         self.client.logout()
         page = self.client.get(path, HTTP_USER_AGENT=UA_IPHONE).content.decode()
-        for step in ("ساخت حساب", "کلید بازیابی", "نصب میان‌بر", "اتصال این آیفون", "اتوماسیون پیامک",
-                     "Add to Home Screen"):
+        for step in ("ساخت حساب", "کلید بازیابی", "راه‌اندازی آیفون", "قدم بعد"):
             self.assertIn(step, page)
         self.assertIn("<b>boss</b> شما را دعوت کرده", page)
         self.assertNotIn('class="qr', page)
@@ -134,3 +133,24 @@ class TestImportBatch(BaseTest):
         self.assertIn("sql-wasm-browser.js", page)
         self.assertIn("3d0d7e5fb2ce288813306e4d4636395e047a3d28", page)
         self.assertIn('name="csrfmiddlewaretoken"', page)
+
+    def test_import_page_shows_the_way_for_this_device(self):
+        def page(ua):
+            return self.client.get("/import/", HTTP_USER_AGENT=ua).content.decode()
+
+        iphone = page("Mozilla/5.0 (iPhone; CPU iPhone OS 16_7 like Mac OS X)")
+        self.assertIn("این صفحه را روی رایانه باز کنید", iphone)
+        self.assertIn("http://testserver/import/", iphone)
+        self.assertNotIn('id="backup"', iphone)
+        self.assertNotIn("sql-wasm-browser.js", iphone)
+        windows = page("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        self.assertIn("apps.microsoft.com/detail/9np83lwlpz9k", windows)
+        self.assertNotIn("MobileSync/Backup", windows)  # not the Mac's steps
+        self.assertLess(windows.index('id="backup"'), windows.index('id="sync"'))  # the command folded below
+        mac = page("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)")
+        self.assertIn("~/Library/Application Support/MobileSync/Backup", mac)
+        self.assertNotIn("apps.microsoft.com", mac)
+        linux = page("Mozilla/5.0 (X11; Ubuntu; Linux x86_64)")
+        self.assertLess(linux.index('id="sync"'), linux.index('id="backup"'))
+        self.assertIn('value="year" data-start', linux)  # a year is picked unless chosen otherwise
+        self.assertIn("checked", linux.split('value="year"')[1].split(">")[0])

@@ -1,10 +1,14 @@
-// Import page: read an iPhone backup's sms.db in the browser (sql.js, WebAssembly) and send only
-// the bank SMS the user picks. Personal conversations never leave the computer.
+// Import page ("old SMS"): the folder of an iPhone backup is dropped on the page; its sms.db is
+// found and read right here in the browser (sql.js, WebAssembly) and only the bank SMS are sent.
+// Personal conversations never leave the computer. Also: the Linux command's progress.
 (function () {
   "use strict";
+  if (!window.fetch) return;
+  syncStatus();
 
   var box = document.getElementById("backup");
-  if (!box || !window.fetch) return;
+  if (!box) return;
+  var drop = document.getElementById("backup-drop");
   var fileInput = document.getElementById("backup-file");
   var statusEl = document.getElementById("backup-status");
   var sendersBox = document.getElementById("backup-senders");
@@ -13,6 +17,7 @@
   var resultEl = document.getElementById("backup-result");
   var csrf = document.querySelector("input[name=csrfmiddlewaretoken]");
 
+  var SMS_DB = "3d0d7e5fb2ce288813306e4d4636395e047a3d28";  // HomeDomain/Library/SMS/sms.db
   var APPLE_EPOCH_MS = 978307200000;  // 2001-01-01, Apple's time zero
   var BATCH = 100;
   // what the Message automation also looks for: the balance line of a bank SMS
@@ -30,7 +35,7 @@
 
   function say(text, cls) {
     statusEl.textContent = text;
-    statusEl.className = "small " + (cls || "");
+    statusEl.className = cls || "";
   }
 
   // iOS 16+ keeps many message texts only in attributedBody (an archived NSAttributedString):
@@ -56,7 +61,7 @@
   }
 
   function periodStart() {
-    var r = box.querySelector("input[name=backup-period]:checked");
+    var r = document.querySelector("input[name=period]:checked");
     return r ? Number(r.dataset.start) : 0;
   }
 
@@ -95,14 +100,15 @@
   function update() {
     var n = selected().length;
     sendBtn.disabled = n === 0;
-    sendBtn.textContent = n ? "ارسال " + fa(n) + " پیامک بانک" : "ارسال پیامک‌های بانک";
+    sendBtn.classList.toggle("hidden", !messages.length);
+    sendBtn.textContent = n ? "ارسال " + fa(n) + " پیامک بانک" : "در این بازه پیامک بانکی نیست";
   }
 
   function read(file) {
     messages = [];
     senders = {};
     resultEl.textContent = "";
-    say("در حال خواندن فایل…");
+    say("⏳ در حال خواندن پیامک‌ها…");
     var engine = window.initSqlJs({ locateFile: function () { return box.dataset.wasm; } });
     Promise.all([engine, file.arrayBuffer()]).then(function (r) {
       var db = new r[0].Database(new Uint8Array(r[1]));
@@ -127,15 +133,16 @@
         }
         stmt.free();
         messages.sort(function (a, b) { return a.at - b.at; });
-        say(messages.length
-          ? fa(scanned) + " پیام خوانده شد؛ " + fa(messages.length) + " پیامک بانکی پیدا شد."
-          : "در این فایل پیامک بانکی (با «موجودی» یا «مانده») پیدا نشد.", messages.length ? "" : "warn-text");
+        var banks = messages.filter(function (m) { return senders[m.sender].checked; }).length;
+        say(banks
+          ? "✓ " + fa(banks) + " پیامک بانک پیدا شد. بازه را بالا انتخاب کنید و دکمه ارسال را بزنید."
+          : "در این پشتیبان پیامک بانکی (با «موجودی» یا «مانده») پیدا نشد.", banks ? "" : "warn-text");
       } finally {
         db.close();
       }
       render();
     }).catch(function () {
-      say("این فایل خوانده نشد. فایل درست (3d0d7e5f… یا sms.db) را انتخاب کنید؛ اگر پشتیبان رمزدار است، اول رمزگذاری را خاموش کنید.", "warn-text");
+      say("پیامک‌ها خوانده نشد. احتمالاً پشتیبان رمزدار است: تیک Encrypt local backup را بردارید، دوباره Back Up Now بزنید و پوشه را دوباره رها کنید.", "warn-text");
       render();
     });
   }
@@ -168,8 +175,13 @@
       var parts = [fa(counts.created || 0) + " تراکنش تازه ثبت شد", fa(counts.duplicate || 0) + " تکراری بود"];
       if (counts.unparsed) parts.push(fa(counts.unparsed) + " خوانده نشد (در «پیامک‌های خوانده‌نشده» می‌ماند)");
       if (counts.ignored) parts.push(fa(counts.ignored) + " کنار گذاشته شد");
-      line.textContent = "✓ " + parts.join(" · ") + ".";
-      line.className = "small";
+      line.textContent = "✅ تمام شد: " + parts.join(" · ") + ".";
+      line.className = "";
+      var a = document.createElement("a");
+      a.href = "/tx/";
+      a.className = "btn block";
+      a.textContent = "دیدن تراکنش‌ها";
+      resultEl.append(a);
       fileInput.disabled = false;
       update();
     }
@@ -181,11 +193,101 @@
     });
   }
 
-  fileInput.addEventListener("change", function () {
-    if (!fileInput.files.length) return;
-    if (!window.initSqlJs) { say("خواننده فایل بارگذاری نشد؛ صفحه را تازه کنید.", "warn-text"); return; }
-    read(fileInput.files[0]);
+  function start(file) {
+    if (!window.initSqlJs) { say("خواننده پیامک بارگذاری نشد؛ صفحه را تازه کنید.", "warn-text"); return; }
+    read(file);
+  }
+
+  // ---- a dropped backup folder: find its sms.db without listing the whole backup ----
+  function getDir(dir, name) {
+    return new Promise(function (ok, fail) { dir.getDirectory(name, {}, ok, fail); });
+  }
+  function getFile(dir, name) {
+    return new Promise(function (ok, fail) {
+      dir.getFile(name, {}, function (e) { e.file(ok, fail); }, fail);
+    });
+  }
+  function children(dir) {
+    var reader = dir.createReader(), all = [];
+    return new Promise(function (ok, fail) {
+      (function more() {
+        reader.readEntries(function (batch) {
+          if (!batch.length) return ok(all);
+          all = all.concat(batch);
+          more();
+        }, fail);
+      })();
+    });
+  }
+  function smsIn(dir) {  // one device's backup folder: <udid>/3d/3d0d7e…
+    return getDir(dir, "3d").then(function (d) { return getFile(d, SMS_DB); }, function () { return getFile(dir, SMS_DB); });
+  }
+  // The folder the user dropped: one device's backup, or the Backup folder holding several
+  // (then the newest), or the MobileSync folder above it.
+  function find(dir, depth) {
+    return smsIn(dir).catch(function () {
+      if (!depth) return null;
+      return children(dir).then(function (list) {
+        return Promise.all(list.filter(function (e) { return e.isDirectory; }).map(function (e) {
+          return find(e, depth - 1).catch(function () { return null; });
+        }));
+      }).then(function (found) {
+        return found.filter(Boolean).sort(function (a, b) { return b.lastModified - a.lastModified; })[0] || null;
+      });
+    });
+  }
+
+  drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", function () { drop.classList.remove("over"); });
+  drop.addEventListener("drop", function (e) {
+    e.preventDefault();
+    drop.classList.remove("over");
+    var item = e.dataTransfer.items && e.dataTransfer.items[0];
+    var entry = item && item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+    if (entry && entry.isDirectory) {
+      say("⏳ در حال پیدا کردن پیامک‌ها در پوشه…");
+      find(entry, 2).then(function (file) {
+        if (file) start(file);
+        else say("در این پوشه پشتیبان آیفون پیدا نشد. پوشه‌ای را رها کنید که در مرحله قبل باز شد (یا پوشه داخل آن).", "warn-text");
+      }, function () { say("این پوشه خوانده نشد. دوباره رها کنید.", "warn-text"); });
+    } else if (e.dataTransfer.files.length) {
+      start(e.dataTransfer.files[0]);
+    }
   });
-  box.querySelectorAll("input[name=backup-period]").forEach(function (r) { r.addEventListener("change", render); });
+  fileInput.addEventListener("change", function () {
+    if (fileInput.files.length) start(fileInput.files[0]);
+  });
+  document.querySelectorAll("input[name=period]").forEach(function (r) { r.addEventListener("change", render); });
   sendBtn.addEventListener("click", send);
+
+  // ---- the Linux command: show here when it has sent the SMS ----
+  function syncStatus() {
+    var st = document.getElementById("sync-status");
+    if (!st) return;
+    var text = st.querySelector(".js-text"), ico = st.querySelector(".ico"), tries = 0, timer = null;
+    function check() {
+      if (document.hidden || tries++ > 2000) return;
+      fetch(st.dataset.url, { credentials: "same-origin", headers: { "Accept": "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (res) {
+          if (!res || !res.started) return;
+          if (!res.done) {
+            ico.textContent = "📨";
+            text.textContent = "در حال ارسال… تا حالا " + fa(res.sent) + " پیامک رسیده.";
+            return;
+          }
+          clearInterval(timer);
+          st.className = "alert info";
+          ico.textContent = "✅";
+          text.textContent = res.sent ? "تمام شد: " + fa(res.sent) + " پیامک بانک رسید. "
+            : "تمام شد. پیامک تازه‌ای نبود: همه از قبل ثبت شده بودند یا در این بازه پیامکی نبود. ";
+          var a = document.createElement("a");
+          a.href = "/tx/";
+          a.textContent = "دیدن تراکنش‌ها";
+          text.append(a);
+        }).catch(function () {});
+    }
+    timer = setInterval(check, 4000);
+    document.addEventListener("visibilitychange", check);
+  }
 })();
