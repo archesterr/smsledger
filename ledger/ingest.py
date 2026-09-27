@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections import Counter
+from datetime import UTC, datetime, timedelta
 from itertools import groupby
 
 from django.db import IntegrityError, transaction
@@ -25,6 +27,11 @@ MAX_SMS_CHARS = 2000
 # (English and Persian iOS). Not an SMS: rejected with a hint instead of stored as "unparsed".
 PLACEHOLDERS = {"shortcut input", "ورودی میانبر", "ورودی میان بر"}
 RE_KEY = re.compile(rf"bearer\s+{security.TOKEN_PREFIX}", re.I)
+# old SMS from an iPhone backup: [{"text": "...", "at": <ms since epoch>}], at most this many per request
+MAX_ITEMS = 500
+EARLIEST_SMS = datetime(2000, 1, 1, tzinfo=UTC)
+# a page load records pending SMS for at most this long; the next one carries on
+PENDING_BUDGET = 20.0
 
 
 class Batch:
@@ -51,6 +58,25 @@ class Batch:
 def split_batch(text: str) -> list[str]:
     """Queue file / pasted text: SMS separated by lines that are exactly '---'."""
     return [b for b in SPLIT_RE.split(text.replace("\r", "")) if b.strip()]
+
+
+def arrival_time(ms) -> datetime | None:
+    """An SMS's arrival time from a backup (ms since epoch), or None if it isn't plausible."""
+    if not isinstance(ms, int | float) or isinstance(ms, bool):
+        return None
+    try:
+        when = datetime.fromtimestamp(ms / 1000, tz=UTC)
+    except (OverflowError, OSError, ValueError):
+        return None
+    return when if EARLIEST_SMS <= when <= timezone.now() + timedelta(days=1) else None
+
+
+def backup_items(items) -> tuple[list[str], list] | None:
+    """(texts, times) from a batch of backup items, or None if it isn't one."""
+    if not isinstance(items, list) or not 0 < len(items) <= MAX_ITEMS or not all(isinstance(i, dict) for i in items):
+        return None
+    texts = [i["text"] if isinstance(i.get("text"), str) else "" for i in items]
+    return texts, [arrival_time(i.get("at")) for i in items]
 
 
 def ingest(user, texts: list[str], source: str, device=None, times: list | None = None) -> list[dict]:
@@ -189,13 +215,18 @@ def recompute_gaps(account: Account) -> int:
     return gaps
 
 
-def process_pending(user) -> int:
+def process_pending(user, budget: float | None = None) -> int:
     """Record the SMS that arrived while the owner was logged out. Needs their key (they're
-    logged in). Each message is claimed with a row lock, so two tabs can't record it twice."""
+    logged in). Each message is claimed with a row lock, so two tabs can't record it twice.
+    budget: stop after this many seconds (a whole backup can be thousands of SMS); the rest
+    stay pending for the next call."""
     dek = vault.key_for(user.pk)
     priv = None
     batch, done = Batch(user), 0
+    deadline = None if budget is None else time.monotonic() + budget
     for pk in user.messages.filter(status=Message.PENDING).order_by("id").values_list("pk", flat=True):
+        if done and deadline is not None and time.monotonic() > deadline:
+            break
         with transaction.atomic():
             m = (Message.objects.select_for_update(skip_locked=True)
                  .filter(pk=pk, status=Message.PENDING).first())

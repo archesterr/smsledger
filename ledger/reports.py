@@ -97,7 +97,7 @@ def health(user) -> dict:
     from .models import Message
 
     last = user.messages.aggregate(m=Max("received_at"))["m"]
-    has_device = user.devices.filter(revoked_at__isnull=True).exists()
+    has_device = user.devices.phones().filter(revoked_at__isnull=True).exists()
     silent = bool(has_device and last and (timezone.now() - last).days >= settings.SILENT_DAYS)
     return {
         "gaps": Transaction.objects.filter(user=user, has_gap=True).count(),

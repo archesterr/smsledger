@@ -469,3 +469,25 @@ details.table-view table { margin-top: 8px; }
   font: 600 17px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.04em;
   text-align: center; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all;
 }
+
+/* ---- old SMS: the drop zone for a backup folder ---- */
+.drop {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; cursor: pointer;
+  margin: 8px 0 12px; padding: 26px 16px; border: 2px dashed var(--accent); border-radius: 14px;
+  background: var(--accent-wash); font-weight: 400;
+}
+.drop b { font-size: 16px; }
+.drop.over { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+#backup-status { margin: 8px 0; font-weight: 550; }
+kbd {
+  display: inline-block; direction: ltr; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+  padding: 1px 6px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 6px; background: var(--raised);
+}
+label.link { display: inline; margin: 0; font-weight: 400; color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+/* ---- setup wizard ---- */
+.wizard-head { padding: 8px 0 2px; font-size: 13.5px;
+  color: var(--muted); font-weight: 600; }
+.wizard-head .progress { margin: 6px 0 0; }
+.wizard-nav { margin: 14px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.wizard-nav .btn.block { width: 100%; }

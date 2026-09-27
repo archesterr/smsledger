@@ -2,16 +2,6 @@
 {% block title %}راه‌اندازی آیفون{% endblock %}
 {% block heading %}راه‌اندازی آیفون{% endblock %}
 {% block content %}
-{% if not user.has_2fa %}
-<a class="alert info" href="{% url 'twofa_setup' %}"><span class="ico">🔐</span><div><b>پیشنهاد: ورود دو مرحله‌ای را روشن کنید</b><br>
-  <span class="small">اطلاعات مالی است؛ با رمز دوم، دزدیدن رمز عبور کافی نیست.</span></div></a>
-{% endif %}
-
-<div class="alert {% if connected %}info{% else %}warning{% endif %}"><span class="ico">{% if connected %}✅{% else %}⏳{% endif %}</span><div>
-  {% if connected %}<b>آیفون وصل است.</b>{% if has_sms %} پیامک‌ها می‌رسند.{% else %} با اولین پیامک بانک، تراکنش اینجا دیده می‌شود.{% endif %}
-  {% else %}<b>سه قدم:</b> نصب میان‌بر (یک لمس)، اتصال (یک لمس)، و ساختن اتوماسیون پیامک (دو دقیقه).{% endif %}
-</div></div>
-
 {% if phone_qr %}
 <div class="card center">
   <p><b>این مراحل را روی خود آیفون انجام دهید.</b> با دوربین آیفون این کد را اسکن کنید تا همین صفحه باز شود:</p>
@@ -19,10 +9,15 @@
 </div>
 {% endif %}
 
+{# One step at a time (app.js); without JavaScript every step shows, one under the other. #}
+<div class="wizard" data-start="{{ start_step }}"{% if new_device %} data-force="1"{% endif %}>
+<div class="wizard-head hidden" aria-live="polite"><span class="js-count"></span><div class="progress"><i></i></div></div>
+
+<section class="wizard-step" data-step="1">
 <h2>۱. نصب میان‌بر</h2>
 <div class="card">
 {% if shortcut_url %}
-  <p>دکمه را بزنید؛ برنامه Shortcuts باز می‌شود. پایین صفحه <b>Add Shortcut</b> را بزنید.</p>
+  <p>دکمه را بزنید؛ برنامه Shortcuts باز می‌شود. پایین صفحه <b>Add Shortcut</b> را بزنید، بعد به همین صفحه (Safari) برگردید.</p>
   <a class="btn block" href="{{ shortcut_url }}">نصب میان‌بر «<bdi>{{ shortcut_name }}</bdi>»</a>
   <p class="muted small">میان‌بر برای همه یکی است و هیچ کلید یا رمزی در خودش ندارد. اگر قبلاً میان‌بر را دستی ساخته‌اید، اول آن و «<bdi>Sync SMS Queue</bdi>» را پاک کنید.</p>
 {% else %}
@@ -75,8 +70,12 @@
     <code class="token">shortcuts sign --mode anyone --input "{{ shortcut_name }}.shortcut" --output "{{ shortcut_name }} signed.shortcut"</code>
     فایل امضاشده را با AirDrop به آیفون بفرستید. (آیفون فقط فایل امضاشده را قبول می‌کند؛ قانون اپل.)</p>
   </details>
-</div>
 
+</div>
+<div class="wizard-nav hidden"><button class="btn block js-next" type="button">نصب کردم، قدم بعد</button></div>
+</section>
+
+<section class="wizard-step" data-step="2">
 <h2>۲. اتصال این آیفون</h2>
 {% if connect_url %}
 <div class="card" data-device-status="{% url 'device_status' new_device.pk %}" data-device-id="{{ new_device.pk }}">
@@ -90,7 +89,7 @@
       <button class="btn secondary small" type="button" data-copy="token">کپی</button>
     </details>
   </div>
-  <div class="js-connected hidden"><p><b>✅ وصل شد.</b> قدم بعد: اتوماسیون پیامک (پایین‌تر).</p></div>
+  <div class="js-connected hidden"><p><b>✅ وصل شد.</b> حالا قدم بعد.</p></div>
   <p class="muted small">این کلید فقط همین یک بار ساخته و نشان داده می‌شود و فقط می‌تواند پیامک <b>بفرستد</b>؛ با آن نمی‌شود چیزی خواند.</p>
 </div>
 {% else %}
@@ -100,7 +99,6 @@
   <p class="muted small">کلید فقط می‌تواند پیامک بفرستد؛ با آن نمی‌شود چیزی خواند. کلیدهایی که ساخته شده‌اند ولی هیچ‌وقت استفاده نشده‌اند، باطل می‌شوند.</p>
 </form>
 {% endif %}
-
 {% if devices %}
 <div class="card flush"><ul class="list">{% for d in devices %}
   <li><div class="item"><span class="ico">📱</span>
@@ -111,15 +109,23 @@
   </div></li>{% endfor %}
 </ul></div>
 {% endif %}
+<div class="wizard-nav hidden"><button class="btn block js-next{% if not connected %} secondary{% endif %}" type="button">{% if connected %}قدم بعد{% else %}وصل شد، قدم بعد{% endif %}</button>
+  <button class="btn ghost small js-back" type="button">قدم قبل</button></div>
+</section>
 
-<h2>۳. مخاطب بانک</h2>
+<section class="wizard-step" data-step="3">
+<h2>۳. ذخیره بانک در مخاطب‌ها</h2>
 <div class="card"><p>یک پیامک بانک را باز کنید، روی فرستنده بزنید و <b>Create New Contact</b> را بزنید؛ اسمش را بگذارید مثلاً <b>Blu</b>.
   برای هر بانک دیگر هم همین کار را بکنید. اتوماسیون آیفون فرستنده را فقط از مخاطب‌ها انتخاب می‌کند.</p>
   <p class="muted small">بانک‌های پشتیبانی‌شده: بلو، سامان، خاورمیانه، پاسارگاد، ملی. پیامک بانک‌های دیگر هم ذخیره می‌شود و بعد از اضافه شدن الگوی آن بانک، خودکار خوانده می‌شود.</p></div>
+<div class="wizard-nav hidden"><button class="btn block js-next" type="button">ذخیره کردم، قدم بعد</button>
+  <button class="btn ghost small js-back" type="button">قدم قبل</button></div>
+</section>
 
+<section class="wizard-step" data-step="4">
 <h2>۴. اتوماسیون پیامک</h2>
 <div class="card">
-  <p>اپل اجازه نمی‌دهد اتوماسیون نصب یا فرستاده شود؛ این تنها قدمی است که باید دستی بسازید. یک اتوماسیون برای هر کلمه (کلمه موجودی حساب در پیامک آن بانک؛ پیامک‌های تبلیغاتی را کنار می‌گذارد):</p>
+  <p>این تنها قدمی است که باید دستی انجام دهید (اپل اجازه نمی‌دهد اتوماسیون نصب شود). دو سه دقیقه طول می‌کشد. یک اتوماسیون برای هر کلمه:</p>
   <ul>
     <li>بلو: <b>«موجودی»</b></li>
     <li>سامان، خاورمیانه، پاسارگاد، ملی (همه با هم در یک اتوماسیون): <b>«مانده»</b></li>
@@ -158,9 +164,31 @@
 
   <p class="muted small">اگر لمسی جا بماند، صفحه «خانه» جای خالی را از روی موجودی پیدا می‌کند و خبر می‌دهد؛ پیامک را از <a href="{% url 'import' %}">وارد کردن پیامک</a> اضافه کنید.</p>
 </div>
+<div class="wizard-nav hidden"><button class="btn block js-next" type="button">ساختم، قدم بعد</button>
+  <button class="btn ghost small js-back" type="button">قدم قبل</button></div>
+</section>
 
-<h2>۵. ارسال شبانه (پیشنهادی)</h2>
-<div class="card">
+<section class="wizard-step" data-step="5">
+<h2>۵. برنامه روی صفحه اصلی</h2>
+<div class="card"><p>در Safari دکمه اشتراک‌گذاری <b>(⬆︎)</b> پایین صفحه ← <b>Add to Home Screen</b> ← <b>Add</b>. از این به بعد «{{ site_name }}» مثل یک برنامه از صفحه اصلی باز می‌شود.</p>
+  <p class="muted small">بار اول که از صفحه اصلی بازش کنید، یک بار دیگر وارد حساب شوید.</p></div>
+<div class="wizard-nav hidden"><button class="btn block js-next" type="button">تمام</button>
+  <button class="btn ghost small js-back" type="button">قدم قبل</button></div>
+</section>
+
+<section class="wizard-step" data-step="6">
+<div class="card center">
+  <div class="ico-big">🎉</div>
+  <p><b>همه چیز آماده است.</b></p>
+  <p>{% if has_sms %}پیامک‌ها می‌رسند و خودکار تراکنش می‌شوند.{% else %}از این به بعد با هر پیامک بانک، تراکنش خودکار ثبت می‌شود. برای امتحان، یک خرید کوچک یا کارت‌به‌کارت کنید.{% endif %}</p>
+  <a class="btn block" href="{% url 'home' %}">رفتن به برنامه</a>
+</div>
+<h2>کارهای اختیاری</h2>
+<div class="card flush"><ul class="menu">
+  <li><a href="{% url 'import' %}"><span class="ico">🗂</span>آوردن پیامک‌های قدیمی (با رایانه)<span class="chev">‹</span></a></li>
+  {% if not user.has_2fa %}<li><a href="{% url 'twofa_setup' %}"><span class="ico">🔐</span>ورود دو مرحله‌ای<span class="chev">‹</span></a></li>{% endif %}
+</ul></div>
+<details class="guide"><summary>ارسال شبانه (اگر گاهی اینترنت ندارید)</summary>
   <p>میان‌بر هر پیامک را اول در صف گوشی نگه می‌دارد. اگر موقع رسیدن پیامک اینترنت نبود، این اتوماسیون هر شب صف را می‌فرستد. هر وقت هم خودتان میان‌بر را اجرا کنید، همین کار را می‌کند.</p>
   <ul>
     <li><b>iOS ۱۷+:</b> Automation ← <b>+</b> ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← <b>Run Immediately</b> ← Next ← <b>New Blank Automation</b> ← Run Shortcut «<bdi>{{ shortcut_name }}</bdi>».</li>
@@ -168,12 +196,8 @@
       <div class="small muted">اتوماسیون ساعت‌دار در iOS ۱۶ بدون لمس اجرا می‌شود.</div></li>
   </ul>
   <p class="muted small">ارسال تکراری مشکلی ندارد؛ سرور تکراری‌ها را کنار می‌گذارد.</p>
+</details>
+<div class="wizard-nav hidden"><button class="btn ghost small js-back" type="button">دوباره دیدن مراحل</button></div>
+</section>
 </div>
-
-<h2>۶. پیامک‌های قدیمی</h2>
-<div class="card"><p>تاریخچه را کامل کنید: در <a href="{% url 'import' %}">وارد کردن پیامک</a> می‌توانید همه پیامک‌های بانک یک ماه، سه ماه، یک سال یا کل تاریخچه را یک‌جا از پشتیبان آیفون بیاورید، یا چند پیامک را دستی بچسبانید.</p></div>
-
-<h2>۷. برنامه روی صفحه اصلی</h2>
-<div class="card"><p>در Safari دکمه اشتراک‌گذاری <b>(⬆︎)</b> پایین صفحه ← <b>Add to Home Screen</b> ← <b>Add</b>. از این به بعد «{{ site_name }}» مثل یک برنامه از صفحه اصلی باز می‌شود.</p>
-  <p class="muted small">بار اول که از صفحه اصلی بازش کنید، یک بار دیگر وارد حساب شوید.</p></div>
 {% endblock %}

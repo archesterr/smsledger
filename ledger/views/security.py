@@ -22,9 +22,10 @@ def security_home(request):
     now = timezone.now()
     sid = request.session.get(audit.SID)
     sessions = list(audit.active(u))
-    devices = list(u.devices.filter(revoked_at__isnull=True).order_by("-last_used_at", "-created_at"))
+    devices = list(u.devices.live().order_by("-last_used_at", "-created_at"))
     for d in devices:
-        d.stale = not d.last_used_at or d.last_used_at < now - timedelta(days=STALE_DEVICE_DAYS)
+        d.stale = d.expires_at is None and (not d.last_used_at or
+                                            d.last_used_at < now - timedelta(days=STALE_DEVICE_DAYS))
     failures = SecurityEvent.objects.filter(user=u, kind__in=audit.FAILURES,
                                             created_at__gte=now - timedelta(days=30)).count()
     codes_left = u.recovery_codes.filter(used_at__isnull=True).count()
@@ -98,7 +99,7 @@ def recovery_key(request):
         u.recovery_saved_at = timezone.now()
         u.save(update_fields=["recovery_saved_at"])
         messages.success(request, "کلید بازیابی ثبت شد. آن را جای امنی، جدا از رمز عبور، نگه دارید.")
-        return redirect("security" if need_pw else "setup" if not u.devices.exists() else "home")
+        return redirect("security" if need_pw else "setup" if not u.devices.phones().exists() else "home")
     return render(request, "ledger/recovery_key.html", {"nav": "more", "form": form, "need_pw": need_pw,
                                                         "missing": not u.recovery_saved_at})
 

@@ -1,0 +1,48 @@
+{% load static %}<div class="card" id="backup" data-wasm="{% static 'ledger/vendor/sqljs/sql-wasm-browser.wasm' %}"
+     data-url="{% url 'import_batch' %}" data-otp="{{ otp_pattern }}">
+  {% if kind != "mac" %}
+  {% if kind != "windows" %}<p><b>ویندوز</b></p>{% endif %}
+  <ol class="steps">
+    <li><b>برنامه Apple Devices را نصب کنید</b> (رایگان، از خود اپل):
+      <a class="btn secondary small" href="https://apps.microsoft.com/detail/9np83lwlpz9k" target="_blank" rel="noopener">دریافت از Microsoft Store</a>
+      <div class="small muted">اگر iTunes دارید، همان هم کار می‌کند.</div></li>
+    <li><b>آیفون را با کابل وصل کنید</b> و قفلش را باز کنید. اگر آیفون پرسید <bdi>Trust This Computer?</bdi>، <b>Trust</b> را بزنید و رمز گوشی را بدهید.</li>
+    <li>در Apple Devices روی آیفون بزنید و <b>Back Up Now</b> را بزنید.
+      <div class="small muted">تیک <bdi>Encrypt local backup</bdi> را نزنید. بار اول ممکن است تا یک ساعت طول بکشد؛ صبر کنید تا تمام شود.</div></li>
+    <li>کلید <span dir="ltr"><kbd>⊞ Win</kbd> + <kbd>R</kbd></span> را با هم بزنید. این را آنجا بچسبانید و <kbd>Enter</kbd>:
+      <code class="token" id="path-win">%USERPROFILE%\Apple\MobileSync\Backup</code>
+      <button class="btn secondary small" type="button" data-copy="path-win">کپی</button>
+      <div class="small muted">پوشه باز نشد؟ این یکی را امتحان کنید: <span dir="ltr" class="mono">%APPDATA%\Apple Computer\MobileSync\Backup</span></div></li>
+    <li>پوشه‌ای را که آنجا هست (اسمش حروف و عدد درهم است) <b>بگیرید و روی کادر پایین رها کنید</b>.</li>
+  </ol>
+  {% endif %}
+  {% if kind != "windows" %}
+  {% if kind != "mac" %}<p><b>مک</b></p>{% endif %}
+  <ol class="steps">
+    <li><b>آیفون را با کابل وصل کنید</b> و قفلش را باز کنید. اگر آیفون پرسید <bdi>Trust This Computer?</bdi>، <b>Trust</b> را بزنید و رمز گوشی را بدهید.</li>
+    <li><b>Finder</b> را باز کنید، اسم آیفون را در ستون کنار بزنید و بعد <b>Back Up Now</b>.
+      <div class="small muted">تیک <bdi>Encrypt local backup</bdi> را نزنید. بار اول ممکن است تا یک ساعت طول بکشد.</div></li>
+    <li>در Finder کلیدهای <span dir="ltr"><kbd>⇧ Shift</kbd> <kbd>⌘ Command</kbd> <kbd>G</kbd></span> را با هم بزنید، این را بچسبانید و <kbd>Enter</kbd>:
+      <code class="token" id="path-mac">~/Library/Application Support/MobileSync/Backup</code>
+      <button class="btn secondary small" type="button" data-copy="path-mac">کپی</button></li>
+    <li>پوشه‌ای را که آنجا هست <b>بگیرید و روی کادر پایین رها کنید</b>.</li>
+  </ol>
+  {% endif %}
+
+  <label class="drop" id="backup-drop" for="backup-file">
+    <span class="ico-big">📂</span>
+    <b>پوشه پشتیبان را اینجا رها کنید</b>
+    <span class="small muted">همین‌جا در مرورگر خوانده می‌شود. فقط پیامک‌های بانک فرستاده می‌شوند؛ گفتگوهای شخصی از رایانه خارج نمی‌شوند.</span>
+  </label>
+  <input type="file" id="backup-file" class="hidden">
+  <div id="backup-status" aria-live="polite"></div>
+  <button class="btn block hidden" id="backup-send" type="button" disabled>ارسال پیامک‌های بانک</button>
+  <div id="backup-result" aria-live="polite"></div>
+  <details class="table-view hidden" id="backup-senders"><summary>فرستنده‌ها (پیشرفته)</summary>
+    <p class="small muted">فقط تیک‌خورده‌ها فرستاده می‌شوند. شماره موبایل‌ها آدم هستند، نه بانک، و تیک ندارند.</p>
+    <ul class="list sender-list"></ul>
+  </details>
+  <noscript><p class="muted small">این بخش به جاوااسکریپت نیاز دارد.</p></noscript>
+  <p class="muted small">پیشرفته: به جای پوشه می‌توانید خود فایل <span class="mono">3d0d7e5fb2ce288813306e4d4636395e047a3d28</span>
+    یا <span class="mono">sms.db</span> را <label for="backup-file" class="link">انتخاب کنید</label>. پشتیبان رمزدار اینجا خوانده نمی‌شود.</p>
+</div>

@@ -31,7 +31,8 @@ def staff_required(view):
 @staff_required
 def staff_home(request):
     users = (User.objects.annotate(
-        n_devices=Count("devices", filter=Q(devices__revoked_at__isnull=True), distinct=True),
+        n_devices=Count("devices", filter=Q(devices__revoked_at__isnull=True, devices__expires_at__isnull=True),
+                        distinct=True),
         last_seen=Max("devices__last_used_at"),
     ).order_by("-date_joined"))
     unparsed = dict(Message.objects.filter(status=Message.UNPARSED).values_list("user").annotate(n=Count("id")))
