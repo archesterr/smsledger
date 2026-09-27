@@ -23,8 +23,9 @@
     <div><b>راه‌اندازی آیفون</b><br><span class="small">تا گوشی را وصل نکنید، پیامک‌های بانک خودکار ثبت نمی‌شوند. چند دقیقه طول می‌کشد.</span></div></a>
 {% endif %}
 {% if health.silent %}
-  <a class="alert critical" href="{% url 'setup' %}"><span class="ico">⛔</span>
-    <div><b>چند روز است پیامکی نرسیده</b><br><span class="small">آخرین پیامک {{ health.last_sms|ago }}. اتوماسیون آیفون را بررسی کنید.</span></div></a>
+  <a class="alert critical" href="{% url 'setup' %}#step-4"><span class="ico">⛔</span>
+    <div><b>چند روز است پیامکی نرسیده</b><br><span class="small">{% if health.last_sms %}آخرین پیامک {{ health.last_sms|ago }}.{% else %}از وقتی آیفون وصل شده، هیچ پیامکی نرسیده.{% endif %}
+      در Shortcuts ← Automation ببینید اتوماسیون پیامک هست (پاک نشده باشد). در iOS ۱۶ باید اعلان هر پیامک را لمس کنید.</span></div></a>
 {% endif %}
 {% if health.gaps %}
   <a class="alert warning" href="{% url 'tx_list' %}?gaps=on"><span class="ico">⚠️</span>

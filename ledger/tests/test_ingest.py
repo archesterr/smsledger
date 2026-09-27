@@ -79,11 +79,17 @@ class TestIngestEndpoint(BaseTest):
         self.assertFalse(Message.objects.exists())
 
     def test_unparsed_is_kept(self):
-        r = self.post_sms(self.token, {"sms": "بانک ناشناس\n500 ریال"})
+        r = self.post_sms(self.token, {"sms": "بانک ناشناس\n500 ریال\nمانده 900"})
         self.assertEqual(r.json(), {"status": "received", "parsed": False})
         self.open_app()
         m = Message.objects.get()
-        self.assertEqual((m.status, m.raw), (Message.UNPARSED, "بانک ناشناس\n500 ریال"))
+        self.assertEqual((m.status, m.raw), (Message.UNPARSED, "بانک ناشناس\n500 ریال\nمانده 900"))
+
+    def test_bank_ads_are_not_kept(self):
+        # the automation runs for every SMS from a bank; one with no balance line is no transaction
+        r = self.post_sms(self.token, {"sms": "جشنواره تخفیف بلو! تا پایان ماه"})
+        self.assertEqual(r.json(), {"status": "ignored", "reason": "not a transaction"})
+        self.assertFalse(Message.objects.exists())
 
     def test_auth_failures_never_contain_status(self):
         # the Sync shortcut deletes its queue only when the response has a "status" key
