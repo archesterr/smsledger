@@ -172,14 +172,18 @@ Everything is explained in Persian inside the app, with the user's own server UR
    saves the key to `Shortcuts/smsledger/key.txt`, says hello to `/ingest?source=connect` and shows
    the server's reply. The setup page turns green by itself when the hello arrives. Keys that were
    made but never used are revoked on the next tap.
-3. **Bank contacts** and the **Message automation** (Apple doesn't let automations be shared):
-   sender = bank contact(s), contains the bank's balance word → Run Shortcut *SMS to Ledger* with
-   *Shortcut Input*. One automation per word: `موجودی` for Blu, `مانده` for Saman, Middle East
-   Bank, Pasargad and Melli. iOS 17+: *Run Immediately*, *Notify When Run* off. **iOS 16** has no
-   *New Blank Automation* / *Run Immediately*: Automation → **Create Personal Automation** → Message
-   → *Message Contains* / *Sender* → Next → **Add Action** → Run Shortcut (expand it to set *Input*
-   = Shortcut Input) → Next → turn off *Ask Before Running* → Done. Each SMS then shows a
-   notification to tap. The setup page opens the guide for the phone's iOS version.
+3. **Bank contacts** and **one Message automation**. Apple lets no app, Shortcut, link or file
+   create an automation (not even MDM), so this is the one manual step: sender = all bank contacts,
+   *Message Contains* left empty → Run Shortcut *SMS to Ledger* with *Shortcut Input*. No word to
+   type means one automation for every bank, and no «ی»/«ي» mismatch. Bank ads now reach the
+   server too, and `ingest` drops any SMS that doesn't parse and has no balance line («موجودی» /
+   «مانده») without storing it. iOS 17+: *Run Immediately*, *Notify When Run* off. **iOS 16** has
+   no *Run Immediately*: Automation → **Create Personal Automation** → Message → *Sender* → Next →
+   **Add Action** → Run Shortcut (expand it to set *Input* = Shortcut Input) → Next → turn off *Ask
+   Before Running* → Done. Each SMS then shows a notification **that must be tapped**. The setup
+   page shows only the phone's iOS version. If a connected phone sends nothing for `SILENT_DAYS`
+   (default 3; counted from the connection when nothing ever came), the home page says so and
+   links to this step.
 4. **Nightly automation** (recommended): Time of Day 03:00 → Run Shortcut *SMS to Ledger*, no input.
 5. **Old SMS** (**وارد کردن پیامک‌های قدیمی**, optional): iOS lets nothing read existing SMS, so
    history comes from an iPhone backup on a computer. The page shows only the way that fits the

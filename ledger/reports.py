@@ -97,8 +97,11 @@ def health(user) -> dict:
     from .models import Message
 
     last = user.messages.aggregate(m=Max("received_at"))["m"]
-    has_device = user.devices.phones().filter(revoked_at__isnull=True).exists()
-    silent = bool(has_device and last and (timezone.now() - last).days >= settings.SILENT_DAYS)
+    phones = user.devices.phones().filter(revoked_at__isnull=True)
+    has_device = phones.exists()
+    # quiet since the last SMS, or since the phone was connected if none came at all
+    since = last or phones.aggregate(m=Max("created_at"))["m"]
+    silent = bool(has_device and since and (timezone.now() - since).days >= settings.SILENT_DAYS)
     return {
         "gaps": Transaction.objects.filter(user=user, has_gap=True).count(),
         "unparsed": user.messages.filter(status=Message.UNPARSED).count(),

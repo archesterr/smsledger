@@ -26,7 +26,7 @@ from .helpers import PASSWORD, BaseTest, blu, find, make_device, make_user
 
 def seed(user, n=3):
     ingest.ingest(user, [blu(1000 * (i + 1), balance=10_000 - i, time=f"1{i}:00") for i in range(n)]
-                  + ["بانک ناشناس\n12 ریال"], "test")
+                  + ["بانک ناشناس\n12 ریال\nمانده 90"], "test")
 
 
 class TestTenantIsolation(BaseTest):
@@ -245,12 +245,28 @@ class TestPages(BaseTest):
         page16 = self.client.get("/setup/", HTTP_USER_AGENT=ua16).content.decode()
         page17 = self.client.get("/setup/", HTTP_USER_AGENT=ua17).content.decode()
         desktop = self.client.get("/setup/", HTTP_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64)").content.decode()
-        self.assertIn('<details class="guide" open><summary>iOS ۱۶', page16)
-        self.assertNotIn('<details class="guide" open><summary>iOS ۱۷', page16)
-        self.assertIn('<details class="guide" open><summary>iOS ۱۷', page17)
-        self.assertNotIn('<details class="guide" open><summary>iOS ۱۶', page17)
-        self.assertIn('<details class="guide" open><summary>iOS ۱۷', desktop)
-        self.assertIn("Create Personal Automation", desktop)  # both guides are always on the page
+        # only the phone's own version; one automation, by sender, no word to type
+        self.assertIn("Create Personal Automation", page16)
+        self.assertIn("لمسش کنید", page16)
+        self.assertNotIn("Run Immediately", page16)
+        self.assertIn("Notify When Run", page17)
+        self.assertNotIn("Create Personal Automation", page17)
+        for page in (page16, page17):
+            self.assertIn("<b>Message Contains</b> را خالی بگذارید", page)
+            self.assertNotIn("«موجودی»", page)
+        self.assertIn("Create Personal Automation", desktop)  # not on the phone: both
+        self.assertIn("Notify When Run", desktop)
+
+    def test_home_warns_when_the_phone_goes_quiet(self):
+        Device.objects.filter(user=self.u).delete()
+        Message.objects.filter(user=self.u).delete()
+        dev, _ = make_device(self.u)
+        self.assertFalse(self.client.get("/").context["health"]["silent"])
+        Device.objects.filter(pk=dev.pk).update(created_at=timezone.now() - timedelta(days=4))
+        page = self.client.get("/")
+        self.assertTrue(page.context["health"]["silent"])  # connected, but nothing ever came
+        self.assertContains(page, "هیچ پیامکی نرسیده")
+        self.assertContains(page, 'href="/setup/#step-4"')
 
     def test_password_change_keeps_session(self):
         r = self.client.post("/settings/", {"form": "password", "old_password": PASSWORD,

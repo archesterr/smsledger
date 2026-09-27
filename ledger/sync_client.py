@@ -330,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
     counts = send(chosen, args.key)
     new = counts.get("received", 0) + counts.get("created", 0) + counts.get("unparsed", 0)
     say(f"\nDone: {num(new)} new, {num(counts.get('duplicate', 0))} already there, "
-        f"{num(counts.get('ignored', 0))} skipped (one-time codes).")
+        f"{num(counts.get('ignored', 0))} skipped (not transactions).")
     say("Go back to the browser: the import page shows them. You can close this window.")
     if not args.db:
         say(f"\n(The messages-only backup stays in {HOME / 'backup'} so next time is quick.\n"

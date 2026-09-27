@@ -6,7 +6,7 @@
 <div class="alert info"><span class="ico">✓</span><div>
   {{ result.created|fa }} تراکنش تازه ثبت شد ·
   {{ result.duplicate|fa }} تکراری بود ·
-  {{ result.unparsed|fa }} خوانده نشد{% if result.ignored %} · {{ result.ignored|fa }} پیامک رمز/کد تأیید کنار گذاشته شد (ذخیره نمی‌شود){% endif %}.
+  {{ result.unparsed|fa }} خوانده نشد{% if result.ignored %} · {{ result.ignored|fa }} پیامک غیرتراکنشی (تبلیغ، رمز پویا) کنار گذاشته شد{% endif %}.
   {% if result.unparsed %}<a href="{% url 'messages' %}">پیامک‌های خوانده‌نشده</a>{% endif %}
 </div></div>
 {% endif %}

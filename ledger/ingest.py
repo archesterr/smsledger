@@ -26,6 +26,7 @@ MAX_SMS_CHARS = 2000
 # What arrives when the Shortcut has the words typed in instead of the blue variable
 # (English and Persian iOS). Not an SMS: rejected with a hint instead of stored as "unparsed".
 PLACEHOLDERS = {"shortcut input", "ورودی میانبر", "ورودی میان بر"}
+RE_BALANCE = re.compile("موجود[یي]|مانده")  # every bank's transaction SMS has a balance line
 RE_KEY = re.compile(rf"bearer\s+{security.TOKEN_PREFIX}", re.I)
 # old SMS from an iPhone backup: [{"text": "...", "at": <ms since epoch>}], at most this many per request
 MAX_ITEMS = 500
@@ -108,9 +109,12 @@ def ingest_one(user, raw: str, source: str, device=None, batch: Batch | None = N
     if parsers.is_sensitive(raw):
         # never stored, never logged: not even the hash
         return {"status": "ignored", "reason": "sensitive"}
-    h = vault.fingerprint(user, raw)
     received_at = received_at or timezone.now()
     tx, err = parsers.parse(raw, ref=received_at)  # year for banks that send none
+    if tx is None and not RE_BALANCE.search(raw):
+        # the automation fires on every SMS from a bank: ads and notices have no balance line
+        return {"status": "ignored", "reason": "not a transaction"}
+    h = vault.fingerprint(user, raw)
     if not vault.has_key(user.pk):
         try:
             with transaction.atomic():
