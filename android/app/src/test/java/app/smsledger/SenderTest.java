@@ -2,12 +2,14 @@ package app.smsledger;
 
 import static org.junit.Assert.assertEquals;
 
-import com.sun.net.httpserver.HttpServer;
-
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetSocketAddress;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -24,7 +26,7 @@ import org.junit.rules.TemporaryFolder;
 public class SenderTest {
     @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
-    private HttpServer server;
+    private ServerSocket server;
     private final List<JSONObject> received = new ArrayList<>();
     private final List<String> auth = new ArrayList<>();
     private int[] codes = {200};
@@ -34,26 +36,54 @@ public class SenderTest {
 
     @Before
     public void setUp() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/ingest", ex -> {
-            JSONObject body = new JSONObject(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-            int code = codes[Math.min(calls++, codes.length - 1)];
-            if (code == 200) received.add(body);
-            auth.add(ex.getRequestHeaders().getFirst("Authorization"));
-            byte[] out = (code == 200 ? "{\"status\": \"ok\"}" : "{\"error\": \"x\"}").getBytes(StandardCharsets.UTF_8);
-            ex.sendResponseHeaders(code, out.length);
-            try (OutputStream o = ex.getResponseBody()) {
-                o.write(out);
+        // a stand-in /ingest (the JDK's HttpServer isn't on Android's unit-test classpath)
+        server = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"));
+        Thread t = new Thread(() -> {
+            while (!server.isClosed()) {
+                try (Socket c = server.accept()) {
+                    handle(c);
+                } catch (IOException e) {
+                    // closed by tearDown or a test
+                }
             }
         });
-        server.start();
+        t.setDaemon(true);
+        t.start();
         queue = new Queue(new File(tmp.getRoot(), "queue.jsonl"));
-        api = new Api("http://127.0.0.1:" + server.getAddress().getPort() + "/", "sml_test", "test");
+        api = new Api("http://127.0.0.1:" + server.getLocalPort() + "/", "sml_test", "test");
+    }
+
+    private void handle(Socket c) throws IOException {
+        InputStream in = c.getInputStream();
+        int length = 0;
+        String authorization = null;
+        for (String line = readLine(in); !line.isEmpty(); line = readLine(in)) {
+            String lower = line.toLowerCase();
+            if (lower.startsWith("content-length:")) length = Integer.parseInt(line.substring(15).trim());
+            if (lower.startsWith("authorization:")) authorization = line.substring(14).trim();
+        }
+        byte[] body = new byte[length];
+        for (int n = 0; n < length; ) n += in.read(body, n, length - n);
+        int code = codes[Math.min(calls++, codes.length - 1)];
+        if (code == 200) received.add(new JSONObject(new String(body, StandardCharsets.UTF_8)));
+        auth.add(authorization);
+        byte[] out = (code == 200 ? "{\"status\": \"ok\"}" : "{\"error\": \"x\"}").getBytes(StandardCharsets.UTF_8);
+        OutputStream o = c.getOutputStream();
+        o.write(("HTTP/1.1 " + code + " X\r\nContent-Type: application/json\r\nContent-Length: " + out.length
+                + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+        o.write(out);
+        o.flush();
+    }
+
+    private static String readLine(InputStream in) throws IOException {
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        for (int ch = in.read(); ch != -1 && ch != '\n'; ch = in.read()) if (ch != '\r') b.write(ch);
+        return b.toString("UTF-8");
     }
 
     @After
-    public void tearDown() {
-        server.stop(0);
+    public void tearDown() throws IOException {
+        server.close();
     }
 
     private void fill(int n, String src) throws IOException {
@@ -102,7 +132,7 @@ public class SenderTest {
     @Test
     public void noInternetIsARetry() throws IOException {
         fill(1, "android");
-        server.stop(0);
+        server.close();
         assertEquals(Sender.Outcome.RETRY, Sender.drain(queue, api, null));
         assertEquals(1, queue.size());
     }
