@@ -27,3 +27,8 @@ updates:
       # a new Postgres major can't start on the old data directory: that upgrade is a manual dump/restore
       - dependency-name: postgres
         update-types: ["version-update:semver-major"]
+  - package-ecosystem: gradle       # the Android app's build plugin and test libraries
+    directory: /android
+    schedule: {interval: monthly}
+    groups:
+      android: {patterns: ["*"]}

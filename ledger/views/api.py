@@ -10,14 +10,14 @@ from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import RequestDataTooBig
 from django.db import connection
 from django.db.models import Max
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.templatetags.static import static
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from .. import audit, ingest, security, shortcut
+from .. import android, audit, ingest, security, shortcut
 from ..models import Device, Message, Transaction, User
 from .app import import_periods
 
@@ -35,7 +35,8 @@ def device_from_request(request) -> Device | None:
 
 # shown on the phone by the Shortcut's Connect step ("message" from the reply)
 MESSAGES = {
-    401: "❌ این کلید معتبر نیست یا باطل شده.\nدر صفحه «راه‌اندازی آیفون» دوباره «اتصال این آیفون» را بزنید.",
+    401: ("❌ این کلید معتبر نیست یا باطل شده.\n"
+          "در سایت، صفحه «راه‌اندازی گوشی» را باز کنید و دوباره دکمه «اتصال» را بزنید."),
     429: "⏳ درخواست‌ها زیاد بود؛ چند دقیقه بعد دوباره امتحان کنید.",
 }
 
@@ -75,10 +76,14 @@ def ingest_view(request):
     if source == "connect":
         # the setup page's Connect button ran the Shortcut, which just saved this key
         _touch(device, ip)
-        return JsonResponse({"status": "connected", "message": (
-            f"✅ این آیفون به حساب «{device.user.username}» وصل شد.\n"
-            "به صفحه راه‌اندازی برگردید و اتوماسیون پیامک را بسازید.")},
-            json_dumps_params={"ensure_ascii": False})
+        name = device.user.username
+        message = (f"✅ این گوشی به حساب «{name}» وصل شد.\n"
+                   "از این به بعد پیامک‌های بانک خودکار فرستاده می‌شوند. یک کار مانده: اجازه پیامک."
+                   if android.is_app(request) else
+                   f"✅ این آیفون به حساب «{name}» وصل شد.\n"
+                   "به صفحه راه‌اندازی برگردید و اتوماسیون پیامک را بسازید.")
+        return JsonResponse({"status": "connected", "account": name, "message": message},
+                            json_dumps_params={"ensure_ascii": False})
     if source == "done":
         # the import page, still open on the computer, sees this and shows the result
         _touch(device, ip)
@@ -229,3 +234,28 @@ def sync_script(request):
     resp = HttpResponse(source, content_type="text/x-python; charset=utf-8")
     resp["Cache-Control"] = "no-cache"
     return resp
+
+
+@login_not_required
+@require_GET
+def android_config(request):
+    """What the Android app needs besides its key: the Shamsi periods for old SMS and the OTP
+    filter. Public, like /sync.py: nothing here is about anyone."""
+    periods = [{k: p[k] for k in ("key", "label", "hint", "start")} for p in import_periods()]
+    resp = JsonResponse({"periods": periods, "otp": shortcut.OTP_PATTERN}, json_dumps_params={"ensure_ascii": False})
+    resp["Cache-Control"] = "no-cache"
+    return resp
+
+
+@login_not_required
+@require_GET
+def android_apk(request):
+    """The app from this server if the admin put it here (phones in Iran may not reach GitHub),
+    otherwise from the latest GitHub release."""
+    apk = settings.ANDROID_APK_DIR / "smsledger.apk"
+    if apk.is_file():
+        resp = FileResponse(apk.open("rb"), as_attachment=True, filename="smsledger.apk",
+                            content_type="application/vnd.android.package-archive")
+        resp["Cache-Control"] = "no-cache"
+        return resp
+    return HttpResponseRedirect(settings.ANDROID_APK_URL)

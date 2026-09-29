@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
-from .. import audit, security, shortcut
+from .. import android, audit, security, shortcut
 from ..forms import CodeForm, DeviceForm, PasswordConfirmForm, UnitPrefForm
 from ..models import Device, RecoveryCode, Transaction, User
 from .app import csv_response
@@ -29,11 +29,13 @@ def ios_version(request) -> int | None:
 def setup(request):
     u = request.user
     ios = ios_version(request)
+    on_android = android.is_android(request)
     new_token = new_device = None
     form = DeviceForm(request.POST if request.method == "POST" else None)
     if request.method == "POST" and form.is_valid():
         token = security.new_token()
-        name = form.cleaned_data["name"] or (f"iPhone · iOS {ios}" if ios else "iPhone")
+        name = form.cleaned_data["name"] or (
+            "Android" if on_android else f"iPhone · iOS {ios}" if ios else "iPhone")
         with transaction.atomic():
             # keys from earlier taps that never reached the server are just loose ends
             stale = u.devices.phones().filter(revoked_at__isnull=True, last_used_at__isnull=True).update(
@@ -49,17 +51,21 @@ def setup(request):
     connected = devices.filter(last_used_at__isnull=False).exists()
     has_sms = u.messages.exists()
     # where the wizard opens: the Connect tap just made a key, or how far this account already got
-    start_step = 2 if new_device else 6 if has_sms else 3 if connected else 1
-    return render(request, "ledger/setup.html", {
+    done = 5 if on_android else 6
+    start_step = 2 if new_device else done if has_sms else 3 if connected else 1
+    here = request.build_absolute_uri(request.path)
+    return render(request, "ledger/setup_android.html" if on_android else "ledger/setup.html", {
         "nav": "more", "form": form, "new_token": new_token, "new_device": new_device, "devices": devices,
-        "connect_url": shortcut.connect_url(new_token) if new_token else None,
+        "connect_url": (None if not new_token
+                        else android.connect_url(request.build_absolute_uri("/"), new_token, here + "#step-1")
+                        if on_android else shortcut.connect_url(new_token)),
         "ingest_url": request.build_absolute_uri("/ingest"),
         "shortcut_url": settings.SHORTCUT_URL, "shortcut_name": shortcut.NAME,
         "otp_pattern": shortcut.OTP_PATTERN,
         "connected": connected, "has_sms": has_sms, "start_step": start_step,
-        "ios": ios,
-        # opened on a computer: the Connect button only works on the iPhone itself
-        "phone_qr": None if ios else segno.make(request.build_absolute_uri(request.path), error="m").svg_inline(
+        "ios": ios, "app_name": android.APP_NAME,
+        # opened on a computer: the Connect button only works on the phone itself
+        "phone_qr": None if ios or on_android else segno.make(here, error="m").svg_inline(
             scale=5, omitsize=True, dark="#111", light="#fff", border=2),
     })
 

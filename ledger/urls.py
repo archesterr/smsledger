@@ -15,6 +15,8 @@ urlpatterns = [
     path("sw.js", api.service_worker, name="sw"),
     path("offline/", api.offline, name="offline"),
     path("sync.py", api.sync_script, name="sync_script"),
+    path("android.apk", api.android_apk, name="android_apk"),
+    path("android/config.json", api.android_config, name="android_config"),
     # app
     path("", app.home, name="home"),
     path("more/", app.more, name="more"),

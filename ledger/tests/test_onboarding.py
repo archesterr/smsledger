@@ -48,7 +48,7 @@ class TestInvite(BaseTest):
         path = self.client.get("/staff/").context["new_link"].split("testserver", 1)[1]
         self.client.logout()
         page = self.client.get(path, HTTP_USER_AGENT=UA_IPHONE).content.decode()
-        for step in ("ساخت حساب", "کلید بازیابی", "راه‌اندازی آیفون", "قدم بعد"):
+        for step in ("ساخت حساب", "کلید بازیابی", "راه‌اندازی گوشی", "قدم بعد"):
             self.assertIn(step, page)
         self.assertIn("<b>boss</b> شما را دعوت کرده", page)
         self.assertNotIn('class="qr', page)

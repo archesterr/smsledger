@@ -1,0 +1,93 @@
+{% extends "ledger/base.html" %}
+{% block title %}راه‌اندازی گوشی{% endblock %}
+{% block heading %}راه‌اندازی گوشی اندرویدی{% endblock %}
+{% block content %}
+{# One step at a time (app.js); without JavaScript every step shows, one under the other. #}
+<div class="wizard" data-start="{{ start_step }}"{% if new_device %} data-force="1"{% endif %}>
+<div class="wizard-head hidden" aria-live="polite"><span class="js-count"></span><div class="progress"><i></i></div></div>
+
+<section class="wizard-step" data-step="1">
+<h2>۱. نصب برنامه</h2>
+<div class="card">
+  <p>برنامه «{{ app_name }}» پیامک‌های بانک را خودش می‌خواند و می‌فرستد؛ هیچ تنظیم دیگری لازم نیست.</p>
+  <a class="btn block" href="{% url 'android_apk' %}" download>دریافت برنامه</a>
+  <ol class="steps">
+    <li>اگر مرورگر پرسید «ممکن است فایل مضر باشد»، <b>دانلود</b> (Download anyway) را بزنید.</li>
+    <li>فایل را باز کنید. اگر گفت نصب از این منبع مجاز نیست: <b>تنظیمات</b> (Settings) ← <b>اجازه از این منبع</b> (Allow from this source) را روشن کنید و برگردید.</li>
+    <li><b>نصب</b> (Install). اگر Play Protect هشدار داد: <b>جزئیات بیشتر</b> (More details) ← <b>در هر صورت نصب شود</b> (Install anyway).</li>
+  </ol>
+  <p class="muted small">برنامه در Google Play نیست، چون گوگل فقط به برنامه اصلی پیامک اجازه خواندن پیامک می‌دهد. برنامه مستقیم از همین سایت می‌آید، هیچ تبلیغ و ردیابی ندارد و جز پیامک‌های بانک چیزی نمی‌فرستد.</p>
+</div>
+<div class="wizard-nav hidden"><button class="btn block js-next" type="button">نصب کردم، قدم بعد</button></div>
+</section>
+
+<section class="wizard-step" data-step="2">
+<h2>۲. اتصال این گوشی</h2>
+{% if connect_url %}
+<div class="card" data-device-status="{% url 'device_status' new_device.pk %}" data-device-id="{{ new_device.pk }}">
+  <div class="js-waiting">
+    <p>این دکمه را بزنید؛ برنامه باز می‌شود و می‌پرسد «وصل شود؟». <b>وصل شو</b> را بزنید، بعد به اینجا برگردید.</p>
+    <a class="btn block" href="{{ connect_url }}">اتصال با برنامه</a>
+    <p class="muted small">دکمه کار نکرد؟ اول برنامه را نصب کنید (قدم ۱)، بعد همین صفحه را دوباره باز کنید و «اتصال این گوشی» را بزنید.</p>
+  </div>
+  <div class="js-connected hidden"><p><b>✅ وصل شد.</b> حالا قدم بعد.</p></div>
+  <p class="muted small">کلید این گوشی فقط می‌تواند پیامک <b>بفرستد</b>؛ با آن نمی‌شود چیزی خواند.</p>
+</div>
+{% else %}
+<form method="post" class="card" novalidate>{% csrf_token %}
+  <p>برای این گوشی یک کلید تازه می‌سازد و با یک لمس به برنامه می‌دهد.</p>
+  <button class="btn block" type="submit">اتصال این گوشی</button>
+  <p class="muted small">کلیدهایی که ساخته شده‌اند ولی هیچ‌وقت استفاده نشده‌اند، باطل می‌شوند.</p>
+</form>
+{% endif %}
+{% include "ledger/_devices.html" %}
+<div class="wizard-nav hidden"><button class="btn block js-next{% if not connected %} secondary{% endif %}" type="button">{% if connected %}قدم بعد{% else %}وصل شد، قدم بعد{% endif %}</button>
+  <button class="btn ghost small js-back" type="button">قدم قبل</button></div>
+</section>
+
+<section class="wizard-step" data-step="3">
+<h2>۳. اجازه پیامک</h2>
+<div class="card">
+  <p>در برنامه دکمه <b>اجازه دسترسی به پیامک</b> را بزنید و <b>اجازه دادن</b> (Allow) را انتخاب کنید.</p>
+  <details class="guide"><summary>نوشت «تنظیمات محدودشده» (Restricted setting)؟</summary>
+    <p>اندروید ۱۳ به بعد برای برنامه‌هایی که از سایت نصب شده‌اند این را می‌گوید. یک بار:</p>
+    <ol class="steps">
+      <li>در برنامه <b>باز کردن تنظیمات برنامه</b> را بزنید (یا: تنظیمات گوشی ← برنامه‌ها ← «{{ app_name }}»).</li>
+      <li>بالای صفحه روی <b>⋮</b> بزنید ← <b>اجازه دادن به تنظیمات محدودشده</b> (Allow restricted settings) و رمز گوشی.</li>
+      <li><b>مجوزها</b> (Permissions) ← <b>پیامک</b> (SMS) ← <b>اجازه دادن</b> (Allow).</li>
+    </ol>
+  </details>
+  <p>اگر برنامه دکمه <b>اجازه کار در پس‌زمینه</b> را نشان داد، آن را هم بزنید و <b>اجازه دادن</b> را انتخاب کنید؛ بعضی گوشی‌ها (شیائومی، سامسونگ، هوآوی) وگرنه برنامه را می‌بندند.</p>
+  <p class="muted small">پیامک‌های شخصی و رمزهای یک‌بارمصرف هرگز از گوشی خارج نمی‌شوند؛ فقط پیامک‌های تراکنش بانک.</p>
+</div>
+<div class="wizard-nav hidden"><button class="btn block js-next" type="button">اجازه دادم، قدم بعد</button>
+  <button class="btn ghost small js-back" type="button">قدم قبل</button></div>
+</section>
+
+<section class="wizard-step" data-step="4">
+<h2>۴. پیامک‌های قدیمی (اختیاری)</h2>
+<div class="card">
+  <p>پیامک‌های بانکی که قبلاً آمده‌اند هم در خود برنامه فرستاده می‌شوند: در برنامه زیر «پیامک‌های قدیمی» یکی از بازه‌ها را بزنید
+    (مثلاً «یک سال اخیر»). رایانه لازم نیست.</p>
+  <p class="muted small">هر چند بار بزنید، پیامک تکراری دوباره ثبت نمی‌شود.</p>
+</div>
+<div class="wizard-nav hidden"><button class="btn block js-next" type="button">تمام</button>
+  <button class="btn ghost small js-back" type="button">قدم قبل</button></div>
+</section>
+
+<section class="wizard-step" data-step="5">
+<div class="card center">
+  <div class="ico-big">🎉</div>
+  <p><b>همه چیز آماده است.</b></p>
+  <p>{% if has_sms %}پیامک‌ها می‌رسند و خودکار تراکنش می‌شوند.{% else %}از این به بعد با هر پیامک بانک، تراکنش خودکار ثبت می‌شود. برای امتحان، یک خرید کوچک یا کارت‌به‌کارت کنید.{% endif %}</p>
+  <a class="btn block" href="{% url 'home' %}">رفتن به سایت</a>
+</div>
+<h2>کارهای اختیاری</h2>
+<div class="card"><p><b>سایت روی صفحه اصلی:</b> در Chrome منوی <b>⋮</b> ← <b>افزودن به صفحه اصلی</b> (Add to Home screen) یا <b>نصب برنامه</b> (Install app).</p></div>
+{% if not user.has_2fa %}<div class="card flush"><ul class="menu">
+  <li><a href="{% url 'twofa_setup' %}"><span class="ico">🔐</span>ورود دو مرحله‌ای<span class="chev">‹</span></a></li>
+</ul></div>{% endif %}
+<div class="wizard-nav hidden"><button class="btn ghost small js-back" type="button">دوباره دیدن مراحل</button></div>
+</section>
+</div>
+{% endblock %}
