@@ -50,7 +50,7 @@ services:
 
   caddy:
     <<: *base
-    image: caddy:2.10-alpine
+    image: caddy:2.11-alpine
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
