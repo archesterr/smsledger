@@ -67,7 +67,7 @@
   </ol>
   <p class="muted small">جواب خطای سرور هیچ‌وقت <code>status</code> ندارد، پس صف فقط بعد از ارسال موفق خالی می‌شود.</p>
   <p class="muted small">Mac دارید؟ <a href="{% url 'shortcut_file' %}">فایل آماده میان‌بر</a> را بگیرید و در Terminal امضا کنید:
-    <code class="token">shortcuts sign --mode anyone --input "{{ shortcut_name }}.shortcut" --output "{{ shortcut_name }} signed.shortcut"</code>
+    <code class="token">mkdir -p signed &amp;&amp; shortcuts sign --mode anyone --input "{{ shortcut_name }}.shortcut" --output "signed/{{ shortcut_name }}.shortcut"</code>
     فایل امضاشده را با AirDrop به آیفون بفرستید. (آیفون فقط فایل امضاشده را قبول می‌کند؛ قانون اپل.)</p>
   </details>
 
@@ -83,7 +83,7 @@
     <p>حالا این دکمه را بزنید و <b>Open</b> را تأیید کنید. میان‌بر کلید این گوشی را ذخیره می‌کند و «✅ وصل شد» را نشان می‌دهد؛ بعد به اینجا برگردید.</p>
     <a class="btn block" href="{{ connect_url }}">اتصال با Shortcuts</a>
     <details class="table-view"><summary>دکمه کار نکرد؟</summary>
-      <p class="small">میان‌بر باید نصب شده باشد و اسمش دقیقاً <b>{{ shortcut_name }}</b> باشد. اگر میان‌بر قدیمی را دستی ساخته‌اید، مقدار هدر
+      <p class="small">میان‌بر باید نصب شده باشد و اسمش دقیقاً <b>{{ shortcut_name }}</b> باشد (اگر مثلاً «<bdi>{{ shortcut_name }} signed</bdi>» است، در Shortcuts روی آن نگه دارید ← <b>Rename</b>). اگر میان‌بر قدیمی را دستی ساخته‌اید، مقدار هدر
         <code>Authorization</code> آن را با این عوض کنید:</p>
       <code class="token" id="token">Bearer {{ new_token }}</code>
       <button class="btn secondary small" type="button" data-copy="token">کپی</button>

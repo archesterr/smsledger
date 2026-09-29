@@ -289,9 +289,11 @@ an iPhone can sign one, so the server can't hand out a ready file. Do this once:
 
 1. Get *SMS to Ledger* onto your iPhone, either
    - **with a Mac**: download it from the staff page (it has your server's address in it), then
-     `shortcuts sign --mode anyone --input "SMS to Ledger.shortcut" --output "SMS to Ledger signed.shortcut"`,
+     `mkdir -p signed && shortcuts sign --mode anyone --input "SMS to Ledger.shortcut" --output "signed/SMS to Ledger.shortcut"`,
      and open the signed file (or AirDrop it to the iPhone) → *Add Shortcut*; or
    - **without a Mac**: build it by hand once from *ساختن دستی میان‌بر* on the setup page.
+   Its name must stay exactly *SMS to Ledger*: the **Connect** button runs it by that name
+   (the file name becomes the shortcut's name, hence the `signed/` folder).
 2. Shortcuts → long-press it → **Share** → **Copy iCloud Link**.
 3. Set `SHORTCUT_URL=<that link>` in `.env` and `docker compose up -d`. Every setup page now has
    the one-tap install button.

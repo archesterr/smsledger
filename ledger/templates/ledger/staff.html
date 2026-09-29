@@ -44,11 +44,12 @@
     <li>میان‌بر «<bdi>{{ shortcut_name }}</bdi>» را روی آیفون خودتان داشته باشید:
       <ul>
         <li><b>با Mac:</b> <a href="{% url 'shortcut_file' %}">فایل میان‌بر</a> (آدرس همین سرور داخلش است) ← در Terminal:
-          <code class="token">shortcuts sign --mode anyone --input "{{ shortcut_name }}.shortcut" --output "{{ shortcut_name }} signed.shortcut"</code>
+          <code class="token">mkdir -p signed &amp;&amp; shortcuts sign --mode anyone --input "{{ shortcut_name }}.shortcut" --output "signed/{{ shortcut_name }}.shortcut"</code>
           ← فایل امضاشده را باز کنید (یا با AirDrop به آیفون بفرستید) ← Add Shortcut.</li>
         <li><b>بدون Mac:</b> طبق «ساختن دستی میان‌بر» در <a href="{% url 'setup' %}">راه‌اندازی آیفون</a> یک بار بسازید.</li>
       </ul>
       <div class="small muted">آیفون از iOS ۱۵ فقط فایل میان‌برِ امضاشده با Apple ID را قبول می‌کند و سرور لینوکسی نمی‌تواند امضا کند؛ برای همین یک بار باید از دست شما رد شود.</div></li>
+    <li>اسم میان‌بر باید دقیقاً «<bdi>{{ shortcut_name }}</bdi>» باشد (دکمه «اتصال» با همین اسم اجرایش می‌کند). اگر فرق دارد، در Shortcuts روی آن نگه دارید ← <b>Rename</b>.</li>
     <li>در Shortcuts روی میان‌بر نگه دارید ← <b>Share</b> ← <b>Copy iCloud Link</b>.</li>
     <li>در فایل <code>.env</code> سرور بگذارید و سرویس را دوباره بالا بیاورید:
       <code class="token">SHORTCUT_URL=https://www.icloud.com/shortcuts/…</code>
