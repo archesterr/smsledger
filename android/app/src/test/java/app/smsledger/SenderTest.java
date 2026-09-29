@@ -35,14 +35,14 @@ public class SenderTest {
     private Api api;
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() throws Exception {
         // a stand-in /ingest (the JDK's HttpServer isn't on Android's unit-test classpath)
         server = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"));
         Thread t = new Thread(() -> {
             while (!server.isClosed()) {
                 try (Socket c = server.accept()) {
                     handle(c);
-                } catch (IOException e) {
+                } catch (Exception e) {
                     // closed by tearDown or a test
                 }
             }
@@ -53,7 +53,7 @@ public class SenderTest {
         api = new Api("http://127.0.0.1:" + server.getLocalPort() + "/", "sml_test", "test");
     }
 
-    private void handle(Socket c) throws IOException {
+    private void handle(Socket c) throws Exception {
         InputStream in = c.getInputStream();
         int length = 0;
         String authorization = null;
@@ -82,18 +82,18 @@ public class SenderTest {
     }
 
     @After
-    public void tearDown() throws IOException {
+    public void tearDown() throws Exception {
         server.close();
     }
 
-    private void fill(int n, String src) throws IOException {
+    private void fill(int n, String src) throws Exception {
         List<Queue.Item> items = new ArrayList<>();
         for (int i = 0; i < n; i++) items.add(new Queue.Item("مانده " + i, 1_700_000_000_000L + i, src));
         queue.add(items);
     }
 
     @Test
-    public void sendsInBatchesAndEmptiesTheQueue() throws IOException {
+    public void sendsInBatchesAndEmptiesTheQueue() throws Exception {
         fill(250, "android-import");
         assertEquals(Sender.Outcome.DONE, Sender.drain(queue, api, null));
         assertEquals(0, queue.size());
@@ -105,7 +105,7 @@ public class SenderTest {
     }
 
     @Test
-    public void oneRequestCarriesOneSource() throws IOException {
+    public void oneRequestCarriesOneSource() throws Exception {
         fill(2, "android");
         fill(1, "android-import");
         Sender.drain(queue, api, null);
@@ -114,7 +114,7 @@ public class SenderTest {
     }
 
     @Test
-    public void keepsTheQueueWhenTheServerIsDown() throws IOException {
+    public void keepsTheQueueWhenTheServerIsDown() throws Exception {
         fill(3, "android");
         codes = new int[]{502};
         assertEquals(Sender.Outcome.RETRY, Sender.drain(queue, api, null));
@@ -122,7 +122,7 @@ public class SenderTest {
     }
 
     @Test
-    public void keepsTheQueueWhenTheKeyIsRevoked() throws IOException {
+    public void keepsTheQueueWhenTheKeyIsRevoked() throws Exception {
         fill(3, "android");
         codes = new int[]{401};
         assertEquals(Sender.Outcome.REVOKED, Sender.drain(queue, api, null));
@@ -130,7 +130,7 @@ public class SenderTest {
     }
 
     @Test
-    public void noInternetIsARetry() throws IOException {
+    public void noInternetIsARetry() throws Exception {
         fill(1, "android");
         server.close();
         assertEquals(Sender.Outcome.RETRY, Sender.drain(queue, api, null));
@@ -138,7 +138,7 @@ public class SenderTest {
     }
 
     @Test
-    public void tooLargeSplitsTheBatch() throws IOException {
+    public void tooLargeSplitsTheBatch() throws Exception {
         fill(4, "android");
         codes = new int[]{413, 200};
         assertEquals(Sender.Outcome.DONE, Sender.drain(queue, api, null));
@@ -147,7 +147,7 @@ public class SenderTest {
     }
 
     @Test
-    public void aTornLineIsSkipped() throws IOException {
+    public void aTornLineIsSkipped() throws Exception {
         fill(1, "android");
         try (OutputStream o = new java.io.FileOutputStream(new File(tmp.getRoot(), "queue.jsonl"), true)) {
             o.write("{\"text\": \"half".getBytes(StandardCharsets.UTF_8));
