@@ -42,6 +42,7 @@ services:
       db: {condition: service_healthy}
     read_only: true
     tmpfs: ["/tmp"]
+    volumes: ["./android:/srv/android:ro"]   # smsledger.apk, if you host the Android app here
     cap_drop: [ALL]
     mem_limit: 512m
     pids_limit: 200

@@ -1,0 +1,58 @@
+plugins {
+    id "com.android.application"
+}
+
+// CI sets these; a local build without them makes an unsigned release (and a debug APK).
+def env = System.getenv()
+def signed = env.SIGNING_KEYSTORE && env.SIGNING_PASSWORD
+
+android {
+    namespace "app.smsledger"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "app.smsledger"
+        minSdk 24          // Android 7
+        targetSdk 35
+        // every CI build is a new version, so phones take it as an update
+        versionCode((env.GITHUB_RUN_NUMBER ?: "1") as int)
+        versionName "1.0.${env.GITHUB_RUN_NUMBER ?: "0"}"
+    }
+
+    signingConfigs {
+        if (signed) {
+            release {
+                storeFile file(env.SIGNING_KEYSTORE)
+                storePassword env.SIGNING_PASSWORD
+                keyAlias env.SIGNING_ALIAS ?: "smsledger"
+                keyPassword env.SIGNING_PASSWORD
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt")
+            if (signed) signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError true
+        checkReleaseBuilds true
+        // sideloaded on purpose: the Play Store policies these warn about don't apply
+        disable "BatteryLife", "ExpiredTargetSdkVersion"
+    }
+}
+
+dependencies {
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "org.json:json:20250517"   // android.jar's org.json is a stub in JVM tests
+}

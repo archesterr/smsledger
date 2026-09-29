@@ -11,3 +11,5 @@ htmlcov/
 .venv/
 venv/
 .ruff_cache/
+
+deploy/android/*.apk

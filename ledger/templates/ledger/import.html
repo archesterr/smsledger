@@ -15,7 +15,13 @@
   <p class="muted small">آیفون به هیچ برنامه‌ای اجازه نمی‌دهد پیامک‌های قبلی را بخواند؛ برای همین این کار یک بار با رایانه و کابل آیفون انجام می‌شود.
     هر چند بار خواستید تکرارش کنید: پیامک تکراری دوباره ثبت نمی‌شود.</p></div>
 
-{% if kind == "phone" %}
+{% if kind == "android" %}
+<div class="card center">
+  <div class="ico-big">📲</div>
+  <p><b>روی اندروید رایانه لازم نیست.</b> برنامه «{{ app_name }}» را باز کنید و زیر «پیامک‌های قدیمی» یکی از بازه‌ها را بزنید.</p>
+  <a class="btn secondary" href="{% url 'setup' %}">برنامه را ندارید؟ راه‌اندازی گوشی</a>
+</div>
+{% elif kind == "phone" %}
 <div class="card center">
   <div class="ico-big">💻</div>
   <p><b>این صفحه را روی رایانه باز کنید</b> (ویندوز، مک یا لینوکس)، وارد حساب شوید و راهنمای همان‌جا را دنبال کنید. نشانی:</p>
@@ -52,7 +58,7 @@
 {% endblock %}
 
 {% block scripts %}
-{% if kind != "phone" %}
+{% if kind != "phone" and kind != "android" %}
 <script src="{% static 'ledger/vendor/sqljs/sql-wasm-browser.js' %}" defer></script>
 <script src="{% static 'ledger/import_backup.js' %}" defer></script>
 {% endif %}

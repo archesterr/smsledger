@@ -102,6 +102,7 @@ def health(user) -> dict:
     # quiet since the last SMS, or since the phone was connected if none came at all
     since = last or phones.aggregate(m=Max("created_at"))["m"]
     silent = bool(has_device and since and (timezone.now() - since).days >= settings.SILENT_DAYS)
+    newest = phones.order_by("-created_at").first()
     return {
         "gaps": Transaction.objects.filter(user=user, has_gap=True).count(),
         "unparsed": user.messages.filter(status=Message.UNPARSED).count(),
@@ -109,4 +110,6 @@ def health(user) -> dict:
         "last_sms": last,
         "silent": silent,
         "has_device": has_device,
+        # which advice fits when SMS stop: the Android app, or the iPhone's automation
+        "android": bool(newest and newest.name.startswith("Android")),
     }

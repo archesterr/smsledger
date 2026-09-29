@@ -4,7 +4,7 @@
 {% block content %}
 {% if phone_qr %}
 <div class="card center">
-  <p><b>این مراحل را روی خود آیفون انجام دهید.</b> با دوربین آیفون این کد را اسکن کنید تا همین صفحه باز شود:</p>
+  <p><b>این مراحل را روی خود گوشی انجام دهید</b> (آیفون یا اندروید). با دوربین گوشی این کد را اسکن کنید تا همین صفحه باز شود؛ راهنمای همان گوشی را نشان می‌دهد:</p>
   <div class="qr" aria-label="QR">{{ phone_qr|safe }}</div>
 </div>
 {% endif %}
@@ -99,16 +99,7 @@
   <p class="muted small">کلید فقط می‌تواند پیامک بفرستد؛ با آن نمی‌شود چیزی خواند. کلیدهایی که ساخته شده‌اند ولی هیچ‌وقت استفاده نشده‌اند، باطل می‌شوند.</p>
 </form>
 {% endif %}
-{% if devices %}
-<div class="card flush"><ul class="list">{% for d in devices %}
-  <li><div class="item"><span class="ico">📱</span>
-    <span class="main"><span class="t1">{{ d.name }} <span class="muted mono small">{{ d.token_prefix }}…</span></span>
-      <span class="t2" id="device-{{ d.pk }}-seen">{% if d.last_used_at %}آخرین ارسال: {{ d.last_used_at|ago }}{% else %}هنوز وصل نشده{% endif %}</span></span>
-    <form method="post" action="{% url 'device_revoke' d.pk %}" data-confirm="دسترسی این دستگاه قطع شود؟">{% csrf_token %}
-      <button class="btn ghost small" type="submit">باطل کردن</button></form>
-  </div></li>{% endfor %}
-</ul></div>
-{% endif %}
+{% include "ledger/_devices.html" %}
 <div class="wizard-nav hidden"><button class="btn block js-next{% if not connected %} secondary{% endif %}" type="button">{% if connected %}قدم بعد{% else %}وصل شد، قدم بعد{% endif %}</button>
   <button class="btn ghost small js-back" type="button">قدم قبل</button></div>
 </section>

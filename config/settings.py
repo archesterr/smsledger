@@ -35,6 +35,11 @@ CSRF_TRUSTED_ORIGINS = [f"https://{DOMAIN}"]
 
 # Optional iCloud link to a ready-made shortcut (with import questions for URL + token).
 SHORTCUT_URL = env("SHORTCUT_URL")
+# The Android app: served from ANDROID_APK_DIR/smsledger.apk if the admin put it there (README,
+# "Android app"), otherwise the download goes to ANDROID_APK_URL (the latest GitHub release).
+ANDROID_APK_DIR = Path(env("ANDROID_APK_DIR", "/srv/android"))
+ANDROID_APK_URL = env("ANDROID_APK_URL",
+                      "https://github.com/archesterr/smsledger/releases/latest/download/smsledger.apk")
 # /metrics is disabled unless a token is set; scrape it with "Authorization: Bearer <token>".
 METRICS_TOKEN = env("METRICS_TOKEN")
 # Behind Caddy: it overwrites X-Forwarded-For, so the last entry is the real client.

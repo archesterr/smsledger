@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
-from .. import audit, charts, ingest, jalali, money, parsers, reports, rules, security, shortcut
+from .. import android, audit, charts, ingest, jalali, money, parsers, reports, rules, security, shortcut
 from ..forms import (
     AccountForm,
     CategoryForm,
@@ -453,10 +453,13 @@ def import_sms(request):
 
 
 def computer_kind(request) -> str:
-    """Which way to old SMS fits the device this page is open on: "phone" (none: it needs a
-    computer), "windows" / "mac" (Apple's own backup, read in the browser) or "linux" (the command)."""
+    """Which way to old SMS fits the device this page is open on: "android" (the app does it),
+    "phone" (none: an iPhone needs a computer), "windows" / "mac" (Apple's own backup, read in the
+    browser) or "linux" (the command)."""
     ua = request.headers.get("User-Agent", "")
-    if any(k in ua for k in ("iPhone", "iPad", "Android")):
+    if "Android" in ua:
+        return "android"  # the app sends old SMS itself
+    if any(k in ua for k in ("iPhone", "iPad")):
         return "phone"
     if "Windows" in ua:
         return "windows"
@@ -477,7 +480,7 @@ def import_page(request, form=None, result=None, sync=None):
         periods[2]["picked"] = True
     return render(request, "ledger/import.html", {
         "nav": "more", "form": form or ImportForm(), "result": result, "periods": periods,
-        "otp_pattern": shortcut.OTP_PATTERN, "sync": sync, "kind": kind,
+        "otp_pattern": shortcut.OTP_PATTERN, "sync": sync, "kind": kind, "app_name": android.APP_NAME,
         # the way that fits this computer first; the other one folded away under it
         "ways": ["command", "backup"] if kind == "linux" else ["backup", "command"],
         "import_url": request.build_absolute_uri(reverse("import")),

@@ -206,7 +206,7 @@ class TestShortcutRuns(BaseTest):
     def test_revoked_key_explains_itself(self):
         phone = Phone(self.client)
         phone.run("Bearer sml_not-a-real-key")
-        self.assertIn("اتصال این آیفون", phone.shown[0])
+        self.assertIn("«اتصال»", phone.shown[0])
 
     def test_sms_is_queued_and_sent(self):
         self.phone.run(blu(1_000_000, balance=2_887_139))

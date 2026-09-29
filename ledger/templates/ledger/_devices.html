@@ -1,0 +1,10 @@
+{% load ledger %}{% if devices %}
+<div class="card flush"><ul class="list">{% for d in devices %}
+  <li><div class="item"><span class="ico">📱</span>
+    <span class="main"><span class="t1">{{ d.name }} <span class="muted mono small">{{ d.token_prefix }}…</span></span>
+      <span class="t2" id="device-{{ d.pk }}-seen">{% if d.last_used_at %}آخرین ارسال: {{ d.last_used_at|ago }}{% else %}هنوز وصل نشده{% endif %}</span></span>
+    <form method="post" action="{% url 'device_revoke' d.pk %}" data-confirm="دسترسی این دستگاه قطع شود؟">{% csrf_token %}
+      <button class="btn ghost small" type="submit">باطل کردن</button></form>
+  </div></li>{% endfor %}
+</ul></div>
+{% endif %}

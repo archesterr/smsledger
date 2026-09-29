@@ -1,7 +1,8 @@
 # smsledger
 
 Bank SMS → a private, shared-server ledger for you and your friends.
-Each iPhone forwards its bank SMS through a Shortcut; the server parses them into transactions,
+Each iPhone forwards its bank SMS through a Shortcut, each Android phone through a small app; the
+server parses them into transactions,
 and each person gets a Persian (RTL) web app with categories, budgets, reports and CSV export.
 Invite-only, per-user isolation, 2FA, no OTP ever stored.
 
@@ -300,6 +301,56 @@ an iPhone can sign one, so the server can't hand out a ready file. Do this once:
 
 A hand-built shortcut from before this version (key in its own header, plus *Sync SMS Queue*)
 keeps working; to move to the new one, delete both and follow steps 1–2 above.
+
+---
+
+## Android app (each user)
+
+Android lets an app read SMS, so there is nothing to build on the phone. On the phone's browser,
+**بیشتر → راه‌اندازی گوشی** shows the Android guide (picked from the browser's User-Agent):
+
+1. **Install**: *دریافت برنامه* downloads `/android.apk` → allow installs from the browser → Install.
+2. **Connect**: *اتصال این گوشی* makes a device key and opens the app with
+   `intent://connect?server=…&key=…` (`smsledger://`). The app shows the server's address and asks
+   before it connects, then says hello to `/ingest?source=connect`, as the Shortcut does.
+3. **Allow SMS** in the app. Android 13+ may call it a *restricted setting* for apps from a browser:
+   App info → ⋮ → *Allow restricted settings*, then Permissions → SMS. The app and the page explain it.
+   Allowing background work stops Xiaomi / Samsung / Huawei battery savers from closing it.
+4. **Old SMS** (optional): in the app, *پیامک‌های قدیمی* → a period. No computer needed.
+
+What it sends: an SMS with a balance line (`موجودی` / `مانده`), not from a mobile number or an
+email, and not a one-time code (the same filters as the Shortcut and `sync_client.py`; the OTP
+pattern comes from `/android/config.json`, and a test keeps the built-in copy in step). SMS go to a
+queue file first and a job sends them when there is internet, retrying with backoff; an SMS leaves
+the queue only after the server kept it. The app has no libraries, ads or analytics; its key can
+only add SMS (the same device keys as iPhones, revocable on the setup page).
+
+### Building and hosting the APK (admin, once)
+
+GitHub Actions (`.github/workflows/android.yml`) runs the app's tests and lint on every change
+under `android/` and keeps a debug APK for testing. To get signed releases on `main`, make a
+signing key once, on any computer with Java (`sudo apt install openjdk-17-jre-headless`):
+
+```bash
+keytool -genkeypair -keystore smsledger-release.jks -alias smsledger -keyalg RSA -keysize 4096 \
+  -validity 36500 -dname "CN=smsledger"          # asks for a password
+base64 -w0 smsledger-release.jks                 # → secret ANDROID_KEYSTORE_B64
+```
+
+Repo → Settings → Secrets and variables → Actions: `ANDROID_KEYSTORE_B64` and
+`ANDROID_KEYSTORE_PASSWORD`. **Back up the .jks file and its password**: phones only accept an update
+signed with the same key; without it, everyone has to uninstall and reinstall.
+
+Each release is a GitHub release (`android-<n>`, marked latest). `/android.apk` redirects there, or
+serves the file itself if you put it on the server (better for phones in Iran):
+
+```bash
+curl -fL -o /opt/smsledger/deploy/android/smsledger.apk \
+  https://github.com/archesterr/smsledger/releases/latest/download/smsledger.apk
+```
+
+No restart needed. Repeat after a new app release. Phones update by downloading `/android.apk` again
+and installing it over the old one; the connection and the queue are kept.
 
 ---
 

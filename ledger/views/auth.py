@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from .. import audit, security, vault
+from .. import android, audit, security, vault
 from ..forms import CodeForm, LoginForm, SignupForm
 from ..models import Invite, RecoveryCode, User
 from .me import RE_IOS
@@ -171,11 +171,11 @@ def join(request, code):
             vault.start_session(request, user, vault.key_for(user.pk))
             finish_login(request, user)
             return redirect("setup")  # after the recovery key page (middleware)
-    on_iphone = bool(RE_IOS.search(request.headers.get("User-Agent", "")))
+    on_phone = bool(RE_IOS.search(request.headers.get("User-Agent", ""))) or android.is_android(request)
     return render(request, "ledger/auth/join.html", {
-        "form": form, "invite": invite, "on_iphone": on_iphone,
+        "form": form, "invite": invite, "on_phone": on_phone,
         "inviter": invite.created_by.username if invite.created_by else "",
         # opened on a computer: the same link as a QR, to carry on on the iPhone
-        "qr": None if on_iphone else segno.make(request.build_absolute_uri(), error="m").svg_inline(
+        "qr": None if on_phone else segno.make(request.build_absolute_uri(), error="m").svg_inline(
             scale=5, omitsize=True, dark="#111", light="#fff", border=2),
     })

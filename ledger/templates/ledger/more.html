@@ -10,7 +10,7 @@
 <div class="card flush"><ul class="menu">
   <li><a href="{% url 'import' %}"><span class="ico">📋</span>وارد کردن پیامک‌های قدیمی<span class="chev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></a></li>
   <li><a href="{% url 'messages' %}"><span class="ico">❓</span>پیامک‌های خوانده‌نشده<span class="chev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></a></li>
-  <li><a href="{% url 'setup' %}"><span class="ico">📱</span>راه‌اندازی آیفون و دستگاه‌ها<span class="chev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></a></li>
+  <li><a href="{% url 'setup' %}"><span class="ico">📱</span>راه‌اندازی گوشی و دستگاه‌ها<span class="chev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></a></li>
   <li><a href="{% url 'security' %}"><span class="ico">🛡️</span>امنیت: دستگاه‌ها، نشست‌ها و رویدادها<span class="chev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></a></li>
   <li><a href="{% url 'settings' %}"><span class="ico">🔐</span>تنظیمات<span class="chev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></a></li>
   {% if user.is_staff %}<li><a href="{% url 'staff' %}"><span class="ico">🛠️</span>مدیریت (دعوت‌ها و کاربران)<span class="chev"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></a></li>{% endif %}
