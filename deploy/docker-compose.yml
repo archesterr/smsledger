@@ -32,8 +32,11 @@ services:
     <<: *base
     build:
       context: ..
+      network: host                 # so the build can use a proxy on this server's 127.0.0.1
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        HTTP_PROXY: ${BUILD_PROXY:-}  # Docker keeps proxy args out of the image
+        HTTPS_PROXY: ${BUILD_PROXY:-}
     image: smsledger:latest
     env_file: .env
     environment:
