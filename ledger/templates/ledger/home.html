@@ -26,7 +26,7 @@
   <a class="alert critical" href="{% url 'setup' %}#step-{% if health.android %}3{% else %}4{% endif %}"><span class="ico">⛔</span>
     <div><b>چند روز است پیامکی نرسیده</b><br><span class="small">{% if health.last_sms %}آخرین پیامک {{ health.last_sms|ago }}.{% else %}از وقتی گوشی وصل شده، هیچ پیامکی نرسیده.{% endif %}
       {% if health.android %}برنامه «دخل و خرج» را روی گوشی باز کنید: باید «وصل است» باشد و هشدار اجازه پیامک یا باتری نداشته باشد.
-      {% else %}در Shortcuts ← Automation ببینید اتوماسیون پیامک هست (پاک نشده باشد). در iOS ۱۶ باید اعلان هر پیامک را لمس کنید.{% endif %}</span></div></a>
+      {% else %}در Shortcuts ← Automation ببینید اتوماسیون پیامک هست (پاک نشده باشد) و «<bdi>SMS to Ledger</bdi>» خطای قرمز ندارد.{% endif %}</span></div></a>
 {% endif %}
 {% if health.gaps %}
   <a class="alert warning" href="{% url 'tx_list' %}?gaps=on"><span class="ico">⚠️</span>
