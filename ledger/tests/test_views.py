@@ -250,6 +250,15 @@ class TestPages(BaseTest):
             self.assertNotIn("۱۶", page)
             self.assertNotIn("«موجودی»", page)
 
+    def test_device_name_has_the_real_ios_version(self):
+        # Safari 26+ says "iPhone OS 18_6" whatever the iOS; its own Version/ is the iOS one
+        frozen = ("Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 "
+                  "(KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1")
+        for agent, name in ((frozen, "iPhone · iOS 27"), (frozen.replace("Version/27.0", "Version/18.6"),
+                                                          "iPhone · iOS 18")):
+            page = self.client.post("/setup/", {"name": ""}, HTTP_USER_AGENT=agent)
+            self.assertEqual(page.context["new_device"].name, name)
+
     def test_home_warns_when_the_phone_goes_quiet(self):
         Device.objects.filter(user=self.u).delete()
         Message.objects.filter(user=self.u).delete()
