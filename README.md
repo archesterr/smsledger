@@ -27,17 +27,16 @@ iPhone (each user)                                  Server (docker compose)
                                                  restic ─► encrypted offsite backups
 ```
 
-## What "automatic" means on each iOS version
+## Supported iPhones
 
-iOS gives apps no access to SMS. The only hook is the Shortcuts **Message** automation:
+iOS 26 and later (26, 27, 28). iOS gives apps no access to SMS; the only hook is the Shortcuts
+**Message** automation, which on these versions runs silently ("Run Immediately"), as does the
+nightly queue sync. A missed SMS is not silent either: every supported bank's SMS carries the
+balance, so the next SMS shows a **balance gap** with the missing amount.
 
-| iOS | Each new SMS | Nightly queue sync |
-|---|---|---|
-| 17+ | fully automatic, silent ("Run Immediately") | automatic |
-| 14 – 16 | a notification appears; **tap it** (Apple's rule, no workaround except a Mac relay) | automatic on 15.4+ |
-
-A missed tap is not silent: every supported bank's SMS carries the balance, so the next SMS shows a
-**balance gap** with the missing amount, and the user pastes the missed SMS into the app.
+Every *If* in the generated shortcut only asks "has any value": iOS 27 drops the typed value of a
+comparison such as "begins with" from an imported shortcut ("Please choose a value for each
+parameter"), so text tests are a *Match Text* whose *Matches* the *If* checks.
 
 ---
 
@@ -178,13 +177,9 @@ Everything is explained in Persian inside the app, with the user's own server UR
    *Message Contains* left empty → Run Shortcut *SMS to Ledger* with *Shortcut Input*. No word to
    type means one automation for every bank, and no «ی»/«ي» mismatch. Bank ads now reach the
    server too, and `ingest` drops any SMS that doesn't parse and has no balance line («موجودی» /
-   «مانده») without storing it. iOS 17+: *Run Immediately*, *Notify When Run* off. **iOS 16** has
-   no *Run Immediately*: Automation → **Create Personal Automation** → Message → *Sender* → Next →
-   **Add Action** → Run Shortcut (expand it to set *Input* = Shortcut Input) → Next → turn off *Ask
-   Before Running* → Done. Each SMS then shows a notification **that must be tapped**. The setup
-   page shows only the phone's iOS version. If a connected phone sends nothing for `SILENT_DAYS`
-   (default 3; counted from the connection when nothing ever came), the home page says so and
-   links to this step.
+   «مانده») without storing it. *Run Immediately*, *Notify When Run* off. If a connected phone
+   sends nothing for `SILENT_DAYS` (default 3; counted from the connection when nothing ever came),
+   the home page says so and links to this step.
 4. **Nightly automation** (recommended): Time of Day 03:00 → Run Shortcut *SMS to Ledger*, no input.
 5. **Old SMS** (**وارد کردن پیامک‌های قدیمی**, optional): iOS lets nothing read existing SMS, so
    history comes from an iPhone backup on a computer. The page shows only the way that fits the

@@ -10,7 +10,7 @@ from ledger.models import Device, Message
 
 from .helpers import BaseTest, blu, login_client, make_device, make_user
 
-UA_IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_7_16 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
+UA_IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
 
 
 class Offline(Exception):
@@ -65,12 +65,8 @@ class Phone:
             if ident == "conditional":
                 group, mode = p["GroupingIdentifier"], p["WFControlFlowMode"]
                 if mode == shortcut.IF:
-                    subject = self.value(p["WFInput"]["Variable"])
-                    if p["WFCondition"] == shortcut.BEGINS_WITH:
-                        ok = str(subject or "").startswith(p["WFConditionalActionString"])
-                    else:
-                        assert p["WFCondition"] == shortcut.HAS_ANY_VALUE
-                        ok = self.has_value(subject)
+                    assert p["WFCondition"] == shortcut.HAS_ANY_VALUE  # iOS 27 loses typed comparison values
+                    ok = self.has_value(self.value(p["WFInput"]["Variable"]))
                     if not ok:  # to this group's Otherwise, or past its End If
                         pc = next(i for i in range(pc + 1, len(acts))
                                   if acts[i]["WFWorkflowActionParameters"].get("GroupingIdentifier") == group)
@@ -131,16 +127,32 @@ class TestShortcutFile(BaseTest):
         wf = plistlib.loads(data)
         self.assertEqual(wf["WFWorkflowMinimumClientVersion"], 900)
         self.assertEqual(wf["WFWorkflowInputContentItemClasses"], ["WFStringContentItem"])
-        self.assertNotIn(b"sml_", data)
-        self.assertNotIn(b"Bearer sml", data)
+        self.assertIsNone(re.search(rb"sml_[A-Za-z0-9]", data))  # no device key, only the pattern
+        uuids = re.findall(rb"<string>([0-9A-F-]{36})</string>", data)
+        ids = [a["WFWorkflowActionParameters"].get("UUID") for a in wf["WFWorkflowActions"]]
+        groups = {a["WFWorkflowActionParameters"].get("GroupingIdentifier") for a in wf["WFWorkflowActions"]}
+        self.assertTrue(uuids)
+        self.assertFalse(set(filter(None, ids)) & groups)  # an output and an If never share an id
         urls = [a["WFWorkflowActionParameters"]["WFURL"] for a in wf["WFWorkflowActions"]
                 if a["WFWorkflowActionIdentifier"].endswith("downloadurl")]
         self.assertEqual(urls, ["https://tx.example.ir/ingest?source=connect", "https://tx.example.ir/ingest?source=iphone",
                                 "https://tx.example.ir/ingest?split=1&source=queue"])
 
+    def test_every_if_only_asks_has_any_value(self):
+        # iOS 27 shows "Please choose a value for each parameter" on an imported If whose
+        # comparison carries a typed value (e.g. begins with "Bearer "), and the run stops there.
+        acts = plistlib.loads(shortcut.build("https://tx.example.ir/ingest"))["WFWorkflowActions"]
+        ifs = [a["WFWorkflowActionParameters"] for a in acts
+               if a["WFWorkflowActionIdentifier"].endswith("conditional")
+               and a["WFWorkflowActionParameters"]["WFControlFlowMode"] == shortcut.IF]
+        self.assertEqual(len(ifs), 5)
+        for p in ifs:
+            self.assertEqual(p["WFCondition"], shortcut.HAS_ANY_VALUE)
+            self.assertFalse({"WFConditionalActionString", "WFNumberValue", "WFConditions"} & p.keys())
+
         # every If has an End If after it, and every variable points at an earlier action
         seen, open_groups = set(), []
-        for a in wf["WFWorkflowActions"]:
+        for a in acts:
             self.assertTrue(a["WFWorkflowActionIdentifier"].startswith("is.workflow.actions."))
             p = a["WFWorkflowActionParameters"]
             for ref in re.findall(r"'OutputUUID': '([0-9A-F-]+)'", repr(p)):
@@ -262,7 +274,7 @@ class TestSetupPage(BaseTest):
 
         r = self.client.post("/setup/", {}, HTTP_USER_AGENT=UA_IPHONE)
         d = r.context["new_device"]
-        self.assertEqual(d.name, "iPhone · iOS 16")
+        self.assertEqual(d.name, "iPhone · iOS 27")
         page = r.content.decode()
         self.assertIn('href="shortcuts://run-shortcut?name=SMS%20to%20Ledger&amp;input=text&amp;text=Bearer%20sml_',
                       page)

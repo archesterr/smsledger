@@ -22,13 +22,16 @@ NAME = "SMS to Ledger"
 KEY_FILE = "smsledger/key.txt"
 QUEUE_FILE = "smsledger/queue.txt"
 KEY_PREFIX = "Bearer "
+KEY_PATTERN = r"^Bearer sml_"  # the Connect button's input, not an SMS
 # One-time passwords and verification codes never leave the phone (the server drops them too).
 OTP_PATTERN = r"رمز(?!\s*ارز)|یک.?بار|کد.?(تایید|تأیید|ورود|فعال|پویا)|OTP"
 
-CLIENT_VERSION = 900  # iOS 16
+CLIENT_VERSION = 900  # the oldest Shortcuts app that imports it (the guide is for iOS 26+)
 OBJ = "￼"  # where a variable sits inside a text field
-# If conditions (WFCondition)
-BEGINS_WITH, HAS_ANY_VALUE = 8, 100
+# If conditions (WFCondition). Only "has any value": iOS 27 drops the typed value of a comparison
+# like "begins with" from an imported file ("Please choose a value for each parameter"), so a text
+# test is a Match Text whose Matches the If checks.
+HAS_ANY_VALUE = 100
 IF, OTHERWISE, END_IF = 0, 1, 2
 _NS = uuid.UUID("0b5f0d52-51ab-4c55-8f0e-4d3c2a7e9a61")
 
@@ -77,12 +80,10 @@ class _Actions(list):
         self.append({"WFWorkflowActionIdentifier": f"is.workflow.actions.{ident}",
                      "WFWorkflowActionParameters": params})
 
-    def if_(self, group: str, ref: dict, condition: int, value: str | None = None):
-        params = {"GroupingIdentifier": _uid(group), "WFControlFlowMode": IF, "WFCondition": condition,
-                  "WFInput": {"Type": "Variable", "Variable": _var(ref)}}
-        if value is not None:
-            params["WFConditionalActionString"] = value
-        self.add("conditional", **params)
+    def if_(self, group: str, ref: dict):
+        """If <ref> has any value."""
+        self.add("conditional", GroupingIdentifier=_uid(group), WFControlFlowMode=IF, WFCondition=HAS_ANY_VALUE,
+                 WFInput={"Type": "Variable", "Variable": _var(ref)})
 
     def otherwise(self, group: str):
         self.add("conditional", GroupingIdentifier=_uid(group), WFControlFlowMode=OTHERWISE)
@@ -108,7 +109,9 @@ def actions(ingest_url: str) -> list[dict]:
     key, queue = _out("key", "File"), _out("queue", "Queue")
 
     # 1. Connect: the setup page runs the shortcut with "Bearer <device key>"
-    a.if_("connect", INPUT, BEGINS_WITH, KEY_PREFIX)
+    a.add("text.match", "is-key", "Key", text=_text(INPUT), WFMatchTextPattern=KEY_PATTERN,
+          WFMatchTextCaseSensitive=True)
+    a.if_("connect", _out("is-key", "Key"))
     a.save_file(INPUT, KEY_FILE)
     a.post("hello", "Server Reply", f"{ingest_url}?source=connect", INPUT, WFHTTPBodyType="JSON", WFJSONValues=_dict())
     a.add("getvalueforkey", "hello-message", "Message", WFInput=_var(_out("hello", "Server Reply")),
@@ -120,10 +123,10 @@ def actions(ingest_url: str) -> list[dict]:
     a.get_file("key", "File", KEY_FILE, error_if_missing=True)  # not connected yet: stop with an error
 
     # 2. An SMS from the Message automation
-    a.if_("sms", INPUT, HAS_ANY_VALUE)
-    a.add("text.match", "otp", "Matches", text=_text(INPUT), WFMatchTextPattern=OTP_PATTERN,
+    a.if_("sms", INPUT)
+    a.add("text.match", "otp-match", "Matches", text=_text(INPUT), WFMatchTextPattern=OTP_PATTERN,
           WFMatchTextCaseSensitive=False)
-    a.if_("otp", _out("otp", "Matches"), HAS_ANY_VALUE)
+    a.if_("otp", _out("otp-match", "Matches"))
     a.add("exit")
     a.end_if("otp")
     # queued first: if there's no internet the request below fails, and the nightly run sends it
@@ -136,13 +139,13 @@ def actions(ingest_url: str) -> list[dict]:
     # 3. No input: the nightly automation (or a manual run) sends the whole queue
     a.otherwise("sms")
     a.get_file("queue", "Queue", QUEUE_FILE, error_if_missing=False)
-    a.if_("queued", queue, HAS_ANY_VALUE)
+    a.if_("queued", queue)
     a.post("sync", "Server Reply", f"{ingest_url}?split=1&source=queue", key, WFHTTPBodyType="File",
            WFRequestVariable=_var(queue))
     a.add("getvalueforkey", "sync-status", "Status", WFInput=_var(_out("sync", "Server Reply")),
           WFGetDictionaryValueType="Value", WFDictionaryKey="status")
     # errors never carry "status" (views/api.py), so a failed sync keeps the queue
-    a.if_("synced", _out("sync-status", "Status"), HAS_ANY_VALUE)
+    a.if_("synced", _out("sync-status", "Status"))
     a.add("gettext", "cleared", "Empty Queue", WFTextActionText="---")
     a.save_file(_out("cleared", "Empty Queue"), QUEUE_FILE)
     a.end_if("synced")

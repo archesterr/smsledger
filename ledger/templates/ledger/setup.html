@@ -30,7 +30,8 @@
 
   <p><b>الف) اتصال</b> (دکمه «اتصال این آیفون» میان‌بر را با کلید اجرا می‌کند)</p>
   <ol class="steps">
-    <li><b>If</b> — <i>Shortcut Input</i> · <b>begins with</b> · <code>Bearer </code> (با یک فاصله بعدش)</li>
+    <li><b>Match Text</b> — الگو: <code>^Bearer sml_</code> در <i>Shortcut Input</i> ← <b>If</b> <i>Matches</i> · <b>has any value</b>
+      <div class="small muted">«begins with» نگذارید: iOS ۲۷ مقدار تایپ‌شده آن را در میان‌بر نصب‌شده گم می‌کند.</div></li>
     <li>داخل If: <b>Save File</b> — <i>Shortcut Input</i> · <b>Ask Where to Save</b> خاموش · Subpath:
       <code class="num">smsledger/key.txt</code> · <b>Overwrite If File Exists</b> روشن</li>
     <li><b>Get Contents of URL</b> — URL: <code class="token" id="url-connect">{{ ingest_url }}?source=connect</code>
@@ -119,8 +120,6 @@
   <p><b>فقط یک اتوماسیون، یک بار.</b> به آیفون می‌گوید «هر پیامکی از بانک آمد، میان‌بر را اجرا کن».
     اپل اجازه نمی‌دهد هیچ برنامه‌ای این را خودکار بسازد؛ حدود یک دقیقه کار دستی است. <b>بعد از ساختن، پاکش نکنید.</b></p>
 
-  {% if not ios or ios >= 17 %}
-  {% if not ios %}<p class="small"><b>iOS ۱۷ و بالاتر</b></p>{% endif %}
   <ol class="steps">
     <li>برنامه <b>Shortcuts</b> ← پایین صفحه <b>Automation</b> ← بالا <b>+</b> ← <b>Message</b>.</li>
     <li>روی <b>Sender</b> بزنید و <b>همه بانک‌ها</b> را از مخاطب‌ها انتخاب کنید. <b>Message Contains</b> را خالی بگذارید.</li>
@@ -128,25 +127,7 @@
     <li><b>New Blank Automation</b> ← <b>Add Action</b> ← بنویسید <b>Run Shortcut</b> و انتخابش کنید.</li>
     <li>روی کلمه کم‌رنگ <b>Shortcut</b> بزنید ← «<bdi>{{ shortcut_name }}</bdi>». روی فلش <b>(›)</b> بزنید ← <b>Input</b> ← <i>Shortcut Input</i> ← <b>Done</b>.</li>
   </ol>
-  <p class="muted small">نتیجه: با هر پیامک بانک، کاملاً خودکار و بی‌صدا.</p>
-  {% endif %}
-
-  {% if not ios or ios < 17 %}
-  {% if not ios %}<p class="small"><b>iOS ۱۶ و قدیمی‌تر</b></p>{% endif %}
-  <ol class="steps">
-    <li>برنامه <b>Shortcuts</b> ← پایین صفحه <b>Automation</b> ← <b>Create Personal Automation</b>
-      (یا اگر اتوماسیون دیگری دارید، <b>+</b> بالای صفحه).</li>
-    <li>کمی پایین بروید ← <b>Message</b>.</li>
-    <li>روی <b>Sender</b> بزنید ← <b>Choose</b> ← <b>همه بانک‌ها</b> را انتخاب کنید ← <b>Done</b>.
-      <b>Message Contains</b> را خالی بگذارید. بالا: <b>Next</b>.</li>
-    <li><b>Add Action</b> ← بنویسید <b>Run Shortcut</b> و انتخابش کنید.</li>
-    <li>روی کلمه کم‌رنگ <b>Shortcut</b> بزنید ← «<bdi>{{ shortcut_name }}</bdi>».
-      روی فلش <b>(›)</b> بزنید ← <b>Input</b> ← <i>Shortcut Input</i>.</li>
-    <li>بالا: <b>Next</b> ← <b>Ask Before Running</b> را خاموش کنید ← <b>Don't Ask</b> ← <b>Done</b>.</li>
-  </ol>
-  <div class="alert warning"><span class="ico">👆</span><div><b>در iOS ۱۶ با هر پیامک بانک یک اعلان Shortcuts می‌آید؛ لمسش کنید.</b>
-    تا لمس نکنید، چیزی فرستاده نمی‌شود. این قانون خود اپل در iOS ۱۶ است (در iOS ۱۷ برداشته شد).</div></div>
-  {% endif %}
+  <p class="muted small">نتیجه: با هر پیامک بانک، کاملاً خودکار و بی‌صدا. (راهنما برای iOS ۲۶ و بالاتر است.)</p>
 
   <p class="muted small">پیامک‌های تبلیغاتی بانک هم میان‌بر را اجرا می‌کنند، ولی سرور نگهشان نمی‌دارد. رمزهای پویا اصلاً از گوشی خارج نمی‌شوند.
     اگر روزی پیامکی نرسد، صفحه «خانه» خبر می‌دهد.</p>
@@ -178,9 +159,7 @@
 <details class="guide"><summary>ارسال شبانه (اگر گاهی اینترنت ندارید)</summary>
   <p>میان‌بر هر پیامک را اول در صف گوشی نگه می‌دارد. اگر موقع رسیدن پیامک اینترنت نبود، این اتوماسیون هر شب صف را می‌فرستد. هر وقت هم خودتان میان‌بر را اجرا کنید، همین کار را می‌کند.</p>
   <ul>
-    {% if not ios or ios >= 17 %}<li><b>iOS ۱۷+:</b> Automation ← <b>+</b> ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← <b>Run Immediately</b> ← Next ← <b>New Blank Automation</b> ← Run Shortcut «<bdi>{{ shortcut_name }}</bdi>».</li>{% endif %}
-    {% if not ios or ios < 17 %}<li><b>iOS ۱۶:</b> Automation ← <b>Create Personal Automation</b> (یا +) ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← Next ← <b>Add Action</b> ← Run Shortcut «<bdi>{{ shortcut_name }}</bdi>» ← Next ← <b>Ask Before Running</b> خاموش ← <b>Don't Ask</b> ← Done.
-      <div class="small muted">اتوماسیون ساعت‌دار در iOS ۱۶ بدون لمس اجرا می‌شود.</div></li>{% endif %}
+    <li>Automation ← <b>+</b> ← <b>Time of Day</b> ← ساعت ۳:۰۰، <b>Daily</b> ← <b>Run Immediately</b> ← Next ← <b>New Blank Automation</b> ← Run Shortcut «<bdi>{{ shortcut_name }}</bdi>».</li>
   </ul>
   <p class="muted small">ارسال تکراری مشکلی ندارد؛ سرور تکراری‌ها را کنار می‌گذارد.</p>
 </details>

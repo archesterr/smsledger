@@ -11,7 +11,7 @@ from ledger.views.app import import_periods
 
 from .helpers import BaseTest, blu, login_client, make_user
 
-UA_IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_7_16 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
+UA_IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
 MELLI_NO_YEAR = "بانك ملي ايران\nانتقال:1,000-\nحساب:97007\nمانده:5,000\n1228-10:00"
 
 

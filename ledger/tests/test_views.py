@@ -239,23 +239,16 @@ class TestPages(BaseTest):
         ingest.ingest(self.u, [blu(1, balance=1)], "test")
         self.assertEqual(self.client.get("/setup/").context["start_step"], 6)
 
-    def test_setup_opens_the_guide_for_the_phones_ios(self):
-        ua16 = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_7_16 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
-        ua17 = ua16.replace("16_7_16", "17_5")
-        page16 = self.client.get("/setup/", HTTP_USER_AGENT=ua16).content.decode()
-        page17 = self.client.get("/setup/", HTTP_USER_AGENT=ua17).content.decode()
-        desktop = self.client.get("/setup/", HTTP_USER_AGENT="Mozilla/5.0 (X11; Linux x86_64)").content.decode()
-        # only the phone's own version; one automation, by sender, no word to type
-        self.assertIn("Create Personal Automation", page16)
-        self.assertIn("لمسش کنید", page16)
-        self.assertNotIn("Run Immediately", page16)
-        self.assertIn("Notify When Run", page17)
-        self.assertNotIn("Create Personal Automation", page17)
-        for page in (page16, page17):
+    def test_setup_has_one_automation_guide(self):
+        ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
+        for agent in (ua, ua.replace("27_0", "26_1"), "Mozilla/5.0 (X11; Linux x86_64)"):
+            page = self.client.get("/setup/", HTTP_USER_AGENT=agent).content.decode()
+            # iOS 26+ only: Run Immediately, one automation by sender, no word to type
+            self.assertIn("Run Immediately", page)
             self.assertIn("<b>Message Contains</b> را خالی بگذارید", page)
+            self.assertNotIn("Create Personal Automation", page)
+            self.assertNotIn("۱۶", page)
             self.assertNotIn("«موجودی»", page)
-        self.assertIn("Create Personal Automation", desktop)  # not on the phone: both
-        self.assertIn("Notify When Run", desktop)
 
     def test_home_warns_when_the_phone_goes_quiet(self):
         Device.objects.filter(user=self.u).delete()
