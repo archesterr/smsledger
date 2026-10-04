@@ -159,6 +159,22 @@ Image names are written out in full (not variables) so Dependabot can keep them 
 If PyPI is unreachable during the build, set
 `PIP_INDEX_URL` to a PyPI mirror; hashes are still verified, so a mirror can't swap packages.
 
+**Through a SOCKS tunnel** (`ssh -D 127.0.0.1:1081 …` to a server abroad): pip can't use SOCKS,
+so put privoxy in front of it as an HTTP proxy on 127.0.0.1:8118, and give that to the build. The
+build runs on the host network for this, and the proxy never ends up in the image.
+
+```bash
+sudo apt install -y privoxy
+echo 'forward-socks5 / 127.0.0.1:1081 .' | sudo tee -a /etc/privoxy/config
+sudo sed -i '/^listen-address *\[::1\]/s/^/#/' /etc/privoxy/config   # IPv4 only: works without IPv6
+sudo systemctl restart privoxy
+curl -sS -o /dev/null -w '%{http_code}\n' -x http://127.0.0.1:8118 https://pypi.org/simple/  # 200
+echo 'BUILD_PROXY=http://127.0.0.1:8118' >> .env
+```
+
+The same tunnel for `git pull` (`git config http.proxy socks5h://127.0.0.1:1081`) and for
+downloads (`curl --socks5-hostname 127.0.0.1:1081 …`). The running containers don't use it.
+
 ---
 
 ## iPhone setup (each user)
