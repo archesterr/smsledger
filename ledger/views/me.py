@@ -18,12 +18,20 @@ from .app import csv_response
 
 # ---- setup: devices + iPhone instructions -----------------------------------------------
 RE_IOS = re.compile(r"(?:iPhone|iPad|CPU) OS (\d+)_")
+RE_SAFARI = re.compile(r"Version/(\d+)")
 
 
 def ios_version(request) -> int | None:
-    """Major iOS version from Safari's User-Agent, to open the right automation guide."""
-    m = RE_IOS.search(request.headers.get("User-Agent", ""))
-    return int(m.group(1)) if m else None
+    """Major iOS version from Safari's User-Agent, for the device's name.
+
+    Safari 26+ freezes the OS part at 18_x, so then its own version (26, 27, …) is the iOS one.
+    """
+    ua = request.headers.get("User-Agent", "")
+    m = RE_IOS.search(ua)
+    if not m:
+        return None
+    safari = RE_SAFARI.search(ua)
+    return max(int(m.group(1)), int(safari.group(1)) if safari else 0)
 
 
 def setup(request):
